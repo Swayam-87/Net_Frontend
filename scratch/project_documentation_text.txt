@@ -1,0 +1,539 @@
+--- PAGE 1 ---
+    
+Page | 1  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core  
+Project Documentation 
+ 
+ 
+ 
+ 
+ 
+Student Project Management System
+ 
+Common Project Documentation 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Prepared By 
+Prof. Madhuresh Fichadiya 
+Computer Science and Engineering 
+Darshan University 
+A.Y . - 2026-27 
+  
+  
+
+--- PAGE 2 ---
+   
+                                                                                    
+Page | 2  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core 
+Project Documentation 
+Project Documentation 
+Table of Contents  
+1. Project Goals & Objectives…………………………….…………………………………………………………….……………………….3 
+Overview………………………………………………………………………………………………………………………………………………. 3 
+Goals………………………………………………………………………………..…………………………………………………………………….3 
+Objectives……………………………………………………………………………………………………………………………………………….4 
+2. Scope of the Project……………………………………………………………………………………………….…………………………….5 
+3. Project Timeline……………………………………………………………………………..……………………………………………………6 
+4. Database Overview..…………………………………………………………………………………………………………………………….7 
+5. Functional Requirements……………………………………………………………………………………………………………………..9 
+6. Screen List 10……………………………………………………………………………………………………………………………………....9 
+7. Screen Design Reference…………………………………………………………………………………………………………………….11 
+ 
+     
+--- PAGE 3 ---
+    
+Page | 3  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core  
+Project Documentation 
+1. Project Goals & Objectives  
+Overview  
+• The Student Project Management System is a role -based Web API application developed using 
+ASP .NET Core technology. The system is designed to manage academic projects assigned to students 
+under faculty supervision. 
+• The application provides separate access and permissions for Admin, Faculty, and Students. The 
+system focuses on project allocation, task management, score tracking, progress monitoring, and 
+secure role-based authorization.  
+• The system follows enterprise -level architecture practices while maintaining moderate project 
+complexity suitable for academic implementation. 
+Goals  
+• Design a Normalized Database Structure:  
+▪ Create efficient and normalized tables to manage Users, Roles, Permissions, Projects, Project 
+Allocations, and Tasks. 
+▪ Implement proper primary and foreign key relationships, including one-to-many and many-to-
+many associations wherever required to maintain data integrity and consistency. 
+• Implement CRUD & Authentication Functionality: 
+▪ Develop Create, Read, Update, and Delete operations for all major entities such as Students, 
+Faculty Members, Projects, Tasks, and Role Management.  
+▪ Ensure secure user authentication and authorization using JWT tokens, along with smooth data 
+management through role-based access control mechanisms. 
+• Ensure Data Integrity and Validation: 
+▪ Ensure that users can easily access project information, monitor progress, and perform their 
+assigned responsibilities based on their roles. 
+• Develop an Intuitive User Interface: 
+▪ Provide a clean, user-friendly, and responsive frontend for efficient management of academic 
+projects and related activities. 
+• Encourage Good Software Development Practices: 
+▪ Apply layered architecture principles, separation of concerns, and modular coding practices to 
+improve maintainability and scalability. 
+▪ Utilize design patterns, DTOs, dependency injection, and proper exception handling to develop 
+a robust and enterprise-ready application. 
+• Facilitate Effective Project Monitoring and Evaluation: 
+▪ Enable faculty members to assign tasks, track student performance, and provide remarks and 
+evaluations throughout the project lifecycle. 
+▪ Automatically calculate project progress and score statistics to support informed academic 
+decision-making. 
+--- PAGE 4 ---
+   
+                                                                                    
+Page | 4  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core 
+Project Documentation 
+Project Documentation 
+Objectives  
+• Student Management: 
+▪ Enable administrators to create, view, update, and manage student profiles, including personal 
+information, contact details, academic information, and project assignments. 
+▪ Allow students to update their own profile information and view project -related details 
+assigned to them. 
+• Faculty Management: 
+▪ Provide functionality to create and maintain faculty profiles, including departmental 
+information, contact details, and areas of expertise. 
+▪ Allow faculty members to supervise allocated projects and monitor the progress of assigned 
+students. 
+• Role and Permission Management: 
+▪ Enable administrators to define and manage user roles such as Admin, Faculty, and Student. 
+▪ Implement role-based permissions to ensure that users can access only the functionalities 
+relevant to their responsibilities. 
+• Project Management: 
+▪ Facilitate the creation, modification, viewing, and deletion of academic projects, including 
+project titles, descriptions, timelines, and status information. 
+▪ Allow faculty members to initiate and manage projects under their supervision while 
+maintaining project lifecycle records. 
+• Project Allocation Management: 
+▪ Enable administrators to allocate projects to students and assign faculty supervisors for 
+effective project guidance. 
+▪ Maintain allocation records to ensure proper tracking of project ownership and faculty 
+responsibilities. 
+• Task Management: 
+▪ Provide functionality to create, assign, update, and manage project tasks associated with 
+individual projects. 
+▪ Allow faculty members to define task priorities, deadlines, and expected outcomes for 
+students. 
+• Student Performance and Score Evaluation: 
+▪ Facilitate the assignment of scores and remarks by faculty members based on the completion 
+and quality of assigned tasks. 
+▪ Maintain records of earned scores and evaluations to support academic assessment processes.  
+• Progress Monitoring and Tracking: 
+▪ Automatically calculate and display task-wise and project-wise progress based on predefined 
+evaluation criteria. 
+▪ Provide students and faculty members with real -time insights into project completion status 
+and pending activities. 
+--- PAGE 5 ---
+    
+Page | 5  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core  
+Project Documentation 
+• Dashboard and Reporting: 
+▪ Provide role -specific dashboards displaying key information such as project statistics, task 
+completion summaries, student performance metrics, and faculty supervision details. 
+▪ Generate meaningful reports to assist administrators and faculty members in monitoring 
+overall project activities. 
+• Data Integrity and Validation: 
+▪ Ensure accurate and consistent data entry through appropriate validations, relational 
+constraints, and business rules. 
+▪ Prevent invalid project allocations, duplicate records, unauthorized modifications, and 
+inconsistencies in task evaluation and progress calculations. 
+• Authentication and Secure Access: 
+▪ Implement secure user authentication using JWT-based authorization mechanisms. 
+▪ Restrict access to system functionalities based on user roles and permissions to maintain 
+confidentiality and system security. 
+2. Scope of the Project  
+• Student and Faculty Management 
+▪ Ability for administrators to manage student and faculty records, including personal 
+information, contact details, and role assignments. 
+▪ Create and maintain faculty profiles with departmental affiliations and areas of expertise. 
+▪ Allow students to manage their profiles and access project -related information assigned to 
+them. 
+• Role and Permission Management 
+▪ Create, update, and manage various user roles such as Admin, Faculty, and Student. 
+▪ Define and assign permissions to control access to different modules and functionalities within 
+the system. 
+▪ Ensure secure role-based access to maintain data confidentiality and system integrity. 
+• Project Creation and Management 
+▪ Enable faculty members and administrators to create, update, view, and manage academic 
+projects. 
+▪ Maintain project details such as project title, description, objectives, timelines, and project 
+status. 
+▪ Support project lifecycle management, including project initiation, execution, completion, and 
+archival. 
+• Project Allocation and Supervision 
+▪ Assign students to projects under the guidance of designated faculty supervisors. 
+▪ Maintain allocation records to track project ownership, supervision responsibilities, and 
+allocation history. 
+▪ Restrict faculty members to viewing and managing only the projects allocated to them. 
+• Task Assignment and Progress Tracking 
+--- PAGE 6 ---
+   
+                                                                                    
+Page | 6  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core 
+Project Documentation 
+Project Documentation 
+▪ Allow faculty members to create, assign, and manage project -related tasks for individual 
+students or project teams. 
+▪ Define task priorities, deadlines, descriptions, and completion criteria. 
+▪ Monitor task completion status and automatically update progress percentages based on 
+predefined evaluation logic. 
+• Input Validation and Error Handling 
+▪ Ensure that all project-related inputs, including project details, task assignments, allocations, 
+and evaluations, are validated for correctness and consistency. 
+▪ Prevent duplicate records, invalid allocations, unauthorized actions, and incorrect score 
+calculations through business rule enforcement. 
+▪ Provide meaningful error messages, warnings, and user -friendly notifications to guide users 
+during system interactions. 
+• Reporting and Analytics 
+▪ Generate reports related to project progress, task completion, student performance, and 
+faculty supervision activities. 
+▪ Support data export functionalities to facilitate academic reviews and administrative reporting 
+requirements. 
+▪ Enable stakeholders to analyze project trends and monitor the effectiveness of project 
+execution processes. 
+ 
+3. Project Timeline  
+Week 
+No. 
+Week 
+Date Task List 
+1 
+22/06/2026 
+To 
+27/06/2026 
+Study and analysis of existing Student Project Management 
+Systems for understanding project requirements. 
+2 
+29/06/2026 
+To 
+04/07/2026 
+Preparation of Common Layout for consistent UI and 
+Different Project Screens 
+3 
+06/07/2026 
+To 
+11/07/2026 
+Screen Designs for List Pages and Add/Edit Pages 
+4 
+13/07/2026 
+To 
+18/07/2026 
+API Project creation with Model Classes and Database 
+creation using Migrations 
+5 
+20/07/2026 
+To 
+25/07/2026 
+API CRUD Endpoints for 2 Modules and Consume the 
+endpoints 
+--- PAGE 7 ---
+    
+Page | 7  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core  
+Project Documentation 
+6 
+27/07/2026 
+To 
+01/08/2026 
+API CRUD Endpoints for next 2 Modules and Consume the 
+endpoints 
+7 
+03/08/2026 
+To 
+08/08/2026 
+API CRUD Endpoints for remaining Modules and Consume the 
+endpoints 
+8 
+10/08/2026 
+To 
+15/08/2026 
+API CRUD Endpoints with Different functionalities like sorting, 
+pagination and filtering and UI Modification as required. 
+9 
+17/08/2026 
+To 
+22/08/2026 
+Dashboard API Designs and Common Response for all the API 
+endpoints and Create Dynamic UI for Dashboard. 
+10 
+24/08/2026 
+To 
+29/08/2026 
+Input Validations using Fluent Validations with appropriate 
+DTOs. 
+11 
+31/08/2026 
+To 
+05/09/2026 
+Authentication & Authorization and Role Base Access 
+Controls Implementation using Json Web Tokens in API 
+Project 
+12 
+07/09/2026 
+To 
+12/09/2026 
+Authentication & Authorization and Role Base Access 
+Controls Implementation using Json Web Tokens Frontend 
+Project 
+13 
+14/09/2026 
+To 
+19/09/2026 
+Repository Pattern Implementation and Service Layer 
+Implementation 
+14 
+21/09/2026 
+To 
+26/09/2026 
+Final Evaluation 
+4. Database Overview  
+SPM_Role   
+ColumnName  DataType  Remarks  
+RoleId int Primary Key 
+RoleName nvarchar(50) Not Null 
+Description nvarchar(250) Allow Null 
+ 
+SPM_User   
+ColumnName  DataType  Remarks  
+UserId int Primary Key 
+--- PAGE 8 ---
+   
+                                                                                    
+Page | 8  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core 
+Project Documentation 
+Project Documentation 
+FullName nvarchar(150) Not Null 
+Email nvarchar(150) Not Null , Unique 
+Password nvarchar(max) Not Null 
+MobileNumber nvarchar(15) Not Null 
+ProfilePicturePath nvarchar(500) Image path, Not Null 
+IsActive bit Not Null  
+IsDeleted bit Allow Null, Soft Delete 
+  
+SPM_UserRole 
+ColumnName  DataType  Remarks  
+RolePermissionId int Primary Key 
+RoleId int Not Null, FK → Roles 
+UserId Int Not Null, FK → Users 
+  
+     
+SPM_Status 
+ColumnName  DataType  Remarks  
+StatusID Int Primary Key 
+StatusName Nvarchar(20) Not Null 
+StatusCssClass Nvarchar(100) Not Null 
+ 
+SPM_Priority 
+ColumnName  DataType   
+PriorityID Int Primary Key 
+PriorityName Nvarchar(20) Not Null 
+PriortyCssClass Nvarchar(20) Not Null 
+ 
+SPM_Project 
+ColumnName  DataType  Remarks  
+ProjectId int Primary Key 
+ProjectTitle nvarchar(200) Not Null 
+Description nvarchar(max) Allow Null 
+StudentId int Not Null, FK → Users 
+FacultyId int Not Null, FK → Users 
+AssignedDate datetime Not Null, Default GETDATE() 
+IsDeleted bit Allow Null, Soft Delete 
+ProjectStatus Int Not Null, FK → Status 
+StartDate datetime Not Null 
+EndDate datetime Not Null 
+TotalTasks int Not Null, Auto Updated 
+--- PAGE 9 ---
+    
+Page | 9  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core  
+Project Documentation 
+CompletedTasks Int Not Null, Auto Updated 
+ProgressPercentage decimal(5,2) Not Null, Auto Calculated 
+ 
+SPM_Task 
+ColumnName  DataType  Remarks  
+TaskId int Primary Key 
+AllocationID int Not Null, FK → Allocation 
+TaskTitle nvarchar(200) Not Null 
+TaskDescription nvarchar(max) Allow Null 
+TaskStatus Int Not Null, FK → Status 
+PriorityID Int Not Null, FK → Priority 
+AssignedScore decimal(5,2) Not Null, Faculty-defined score 
+EarnedScore decimal(5,2) Allow Null, Obtained score 
+ProgressPercentage decimal(5,2) Not Null, Auto Calculated 
+StartDate datetime Allow Null 
+DueDate datetime Allow Null 
+CompletedDate datetime Allow Null 
+FacultyRemarks nvarchar(500) Allow Null 
+StudentRemarks nvarchar(500) Allow Null 
+IsDeleted bit Allow Null, Soft Delete 
+5. Functional Requirements  
+• Role Management: Priority - 1  
+• Manage Roles 
+• Prevent duplicate Roles 
+• User Management: Priority - 1 
+• Manage (Create, View, Edit, Delete) Users. 
+• Prevent duplicate entries 
+• Maintain audit fields (Created, Modified) automatically 
+• User-Role Management: Priority - 2  
+• Manage User Roles. 
+• Prevent Duplicates and Assign Roles accordingly. 
+• Status and Priority Management: Priority - 2  
+• Manage Status and Priority. 
+• Prevent duplicate entries. 
+• Project Management: Priority - 3 
+• Manage Project with Proper Faculty and Student Assignment. 
+• Prevent Duplicates 
+• Task Management: Priority - 3 
+• Create, update, view, and delete project tasks. 
+--- PAGE 10 ---
+   
+                                                                                    
+Page | 10  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core 
+Project Documentation 
+Project Documentation 
+• Assign tasks to students with priorities and deadlines. 
+• Update task status (Pending, In Progress, Completed, Rejected). 
+• Prevent duplicate task assignments within the same project. 
+• Automatically calculate task progress percentages. 
+• Automatically update project completion percentages based on task evaluations. 
+• Dashboard and Reporting: Priority - 4 
+• Design role-based dashboards for Admin, Faculty, and Students. 
+• Provide project statistics and task completion summaries based on roles. 
+• Generate reports related to student performance and project progress. 
+• Support export functionality for reports in various formats where applicable. 
+• Authentication and Authorization: Priority – 4 
+• Implement secure login functionality using JWT authentication. 
+• Support logout and token validation mechanisms. 
+• Restrict access to APIs based on assigned roles and permissions. 
+• Ensure unauthorized users cannot access protected resources. 
+6. Screen List  
+1. Authentication & Dashboard 
+1. Login Page: Role-based authentication (Admin / Faculty / Student) using JWT-based 
+authorization. 
+2. Dashboard: Displays an overview of active projects, completed projects, pending tasks, 
+upcoming deadlines, and project statistics based on the logged-in user's role. 
+3. Profile: View and update personal information, contact details, and profile picture for 
+the logged-in user. 
+2. Master Configuration 
+o Role Management (List Page and Add/Edit Screens) 
+o User Management (List, Profile, and Add/Edit Screens) 
+o Role-User Management (List Page and Add/Edit Screens) 
+3. Project and Task Management 
+o Project Management (List Page, Detailed View and Add/Edit Screens) 
+o Task Management (List Page, Detailed View and Add/Edit Screens) 
+4. Dashboards and Reports 
+o Role based Dashboards (Admin/Faculty/Student Dashboards) 
+o Reports for Different statistics as required. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+--- PAGE 11 ---
+    
+Page | 11  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core  
+Project Documentation 
+ 
+7. Screen Design Reference  
+Login Page 
+Dashboard 
+ 
+  
+
+--- PAGE 12 ---
+   
+                                                                                    
+Page | 12  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core 
+Project Documentation 
+Project Documentation 
+Manage Roles
+ 
+Roles Add/Edit Page 
+ 
+  
+
+--- PAGE 13 ---
+    
+Page | 13  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core  
+Project Documentation 
+Manage Users
+ 
+ 
+User Add/Edit Page 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 14 ---
+   
+                                                                                    
+Page | 14  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core 
+Project Documentation 
+Project Documentation 
+Manage Projects 
+ 
+ 
+Project Add/Edit Page 
+ 
+ 
+
+--- PAGE 15 ---
+    
+Page | 15  
+ 
+2401CS521 - Building RESTful APIs with ASP .NET Core  
+Project Documentation 
+Manage Tasks 
+ 
+ 
+Task Add/Edit  
+ 
+
