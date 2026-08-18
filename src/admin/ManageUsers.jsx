@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
+import { getUsers, getUserTypes, createUser, updateUser, deleteUser } from '../services/api';
 
 const ManageUsers = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('Add');
   const [selectedUser, setSelectedUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -21,60 +24,45 @@ const ManageUsers = () => {
   const [users, setUsers] = useState([]);
   const [userTypes, setUserTypes] = useState([]);
 
-  const fetchUsers = async () => {
+  const loadData = async () => {
     try {
-      const response = await fetch("https://localhost:7173/api/User");
-      const json = await response.json();
-      const data = json.data ? json.data : (Array.isArray(json) ? json : []);
-      const normalized = data.map(u => ({
-        userId: u.userID || u.userId,
-        fullName: u.fullName || '',
-        email: u.email || '',
-        mobileNumber: u.mobileNumber || '',
-        userTypeId: u.userTypeID || u.userTypeId || 1,
-        role: u.userTypeName || 'User',
-        isActive: u.isActive !== undefined ? u.isActive : true
-      }));
-      setUsers(normalized);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-    }
-  };
-
-  const fetchUserTypes = async () => {
-    try {
-      const response = await fetch("https://localhost:7173/api/UserType");
-      const json = await response.json();
-      const data = json.data ? json.data : (Array.isArray(json) ? json : []);
-      setUserTypes(data);
-    } catch (error) {
-      console.error("Error fetching user types:", error);
+      setLoading(true);
+      const [usersRes, typesRes] = await Promise.all([getUsers(), getUserTypes()]);
+      setUsers(Array.isArray(usersRes) ? usersRes : (usersRes?.data || []));
+      setUserTypes(Array.isArray(typesRes) ? typesRes : (typesRes?.data || []));
+      setErrorMessage('');
+    } catch (err) {
+      console.error("Failed to load users from backend:", err);
+      setErrorMessage(err.message || 'Failed to connect to backend.');
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
-    fetchUserTypes();
+    loadData();
   }, []);
 
-  const filteredUsers = users.filter(user => 
-    (user.fullName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (user.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (user.mobileNumber || '').includes(searchQuery) ||
-    (user.role || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUsers = users.filter(user => {
+    const name = user.fullName || user.FullName || '';
+    const email = user.email || user.Email || '';
+    const mobile = user.mobileNumber || user.MobileNumber || '';
+    const role = user.userTypeName || user.UserTypeName || user.role || '';
+    const q = searchQuery.toLowerCase();
+    return name.toLowerCase().includes(q) || email.toLowerCase().includes(q) || mobile.includes(q) || role.toLowerCase().includes(q);
+  });
 
   const handleOpenModal = (type, user = null) => {
     setModalType(type);
     if (user) {
       setSelectedUser(user);
       setFormData({
-        fullName: user.fullName || '',
-        email: user.email || '',
-        password: '',
-        mobileNumber: user.mobileNumber || '',
-        userTypeId: user.userTypeId || '1',
-        isActive: user.isActive !== undefined ? user.isActive : true
+        fullName: user.fullName || user.FullName || '',
+        email: user.email || user.Email || '',
+        password: user.password || user.Password || '',
+        mobileNumber: user.mobileNumber || user.MobileNumber || '',
+        userTypeId: String(user.userTypeID || user.userTypeId || user.UserTypeID || (userTypes[0]?.userTypeID || '1')),
+        isActive: user.isActive !== undefined ? user.isActive : (user.IsActive !== undefined ? user.IsActive : true)
       });
     } else {
       setSelectedUser(null);
@@ -83,7 +71,7 @@ const ManageUsers = () => {
         email: '',
         password: '',
         mobileNumber: '',
-        userTypeId: userTypes.length > 0 ? (userTypes[0].userTypeID || userTypes[0].userTypeId) : '1',
+        userTypeId: userTypes.length > 0 ? String(userTypes[0].userTypeID || userTypes[0].userTypeId) : '1',
         isActive: true
       });
     }
@@ -98,49 +86,44 @@ const ManageUsers = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const typeIdInt = parseInt(formData.userTypeId, 10);
       if (modalType === 'Add') {
-        await fetch("https://localhost:7173/api/User", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userTypeID: parseInt(formData.userTypeId),
-            fullName: formData.fullName,
-            email: formData.email,
-            password: formData.password || "password123",
-            mobileNumber: formData.mobileNumber
-          })
+        await createUser({
+          fullName: formData.fullName,
+          email: formData.email,
+          password: formData.password || 'password123',
+          mobileNumber: formData.mobileNumber,
+          userTypeID: typeIdInt,
+          profilePicturePath: ''
         });
       } else if (modalType === 'Edit' && selectedUser) {
-        const id = selectedUser.userId;
-        await fetch(`https://localhost:7173/api/User/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userTypeID: parseInt(formData.userTypeId),
-            fullName: formData.fullName,
-            email: formData.email,
-            password: formData.password || "password123",
-            mobileNumber: formData.mobileNumber,
-            isActive: Boolean(formData.isActive)
-          })
+        const userId = selectedUser.userID || selectedUser.userId || selectedUser.UserID;
+        await updateUser(userId, {
+          userTypeID: typeIdInt,
+          fullName: formData.fullName,
+          userCode: selectedUser.userCode || selectedUser.UserCode || '',
+          email: formData.email,
+          password: formData.password || selectedUser.password || 'password123',
+          mobileNumber: formData.mobileNumber,
+          profilePicturePath: selectedUser.profilePicturePath || '',
+          isActive: Boolean(formData.isActive),
+          isDeleted: false
         });
       }
-      fetchUsers();
       handleCloseModal();
-    } catch (error) {
-      console.error("Error saving user:", error);
+      await loadData();
+    } catch (err) {
+      alert(err.message || 'Error saving user');
     }
   };
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
-        await fetch(`https://localhost:7173/api/User/${id}`, {
-          method: "DELETE"
-        });
-        fetchUsers();
-      } catch (error) {
-        console.error("Error deleting user:", error);
+        await deleteUser(id);
+        await loadData();
+      } catch (err) {
+        alert(err.message || 'Failed to delete user');
       }
     }
   };
@@ -167,6 +150,13 @@ const ManageUsers = () => {
           Add User
         </button>
       </div>
+
+      {/* Error message banner */}
+      {errorMessage && (
+        <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px' }}>
+          <strong>Error connecting to backend:</strong> {errorMessage}
+        </div>
+      )}
 
       {/* Filter and Search */}
       <div className="card" style={{ padding: '16px 20px', marginBottom: '20px' }}>
@@ -204,73 +194,95 @@ const ManageUsers = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.length > 0 ? (
-                filteredUsers.map((user) => (
-                  <tr key={user.userId}>
-                    <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{user.userId}</span></td>
-                    <td><span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{user.fullName}</span></td>
-                    <td style={{ color: 'var(--text-muted)' }}>{user.email}</td>
-                    <td style={{ color: 'var(--text-muted)' }}>{user.mobileNumber}</td>
-                    <td>
-                      <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge ${user.isActive ? 'completed' : 'rejected'}`}>
-                        {user.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        <button 
-                          onClick={() => handleOpenModal('Edit', user)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: 'var(--primary-light)',
-                            color: 'var(--primary)',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                          </svg>
-                          Edit
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(user.userId)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#fee2e2',
-                            color: '#ef4444',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                          </svg>
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+              {loading ? (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                    Loading users from backend...
+                  </td>
+                </tr>
+              ) : filteredUsers.length > 0 ? (
+                filteredUsers.map((user) => {
+                  const id = user.userID || user.userId || user.UserID;
+                  const name = user.fullName || user.FullName;
+                  const email = user.email || user.Email;
+                  const mobile = user.mobileNumber || user.MobileNumber || '-';
+                  const roleName = user.userTypeName || user.UserTypeName || user.role || 'User';
+                  const active = user.isActive !== undefined ? user.isActive : (user.IsActive !== undefined ? user.IsActive : true);
+
+                  return (
+                    <tr key={id}>
+                      <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{id}</span></td>
+                      <td><span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{name}</span></td>
+                      <td style={{ color: 'var(--text-muted)' }}>{email}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>{mobile}</td>
+                      <td>
+                        <span style={{ 
+                          fontWeight: 600, 
+                          color: roleName.toLowerCase() === 'admin' ? '#4f46e5' : roleName.toLowerCase() === 'faculty' ? '#0284c7' : '#10b981',
+                          backgroundColor: roleName.toLowerCase() === 'admin' ? '#eef2ff' : roleName.toLowerCase() === 'faculty' ? '#e0f2fe' : '#ecfdf5',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '0.85rem'
+                        }}>
+                          {roleName}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${active ? 'completed' : 'rejected'}`}>
+                          {active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button 
+                            onClick={() => handleOpenModal('Edit', user)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: 'var(--primary-light)',
+                              color: 'var(--primary)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(id)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#fee2e2',
+                              color: '#ef4444',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
@@ -341,7 +353,7 @@ const ManageUsers = () => {
               </button>
             </div>
 
-            {/* Modal Body (Blank Form) */}
+            {/* Modal Body (Form) */}
             <form onSubmit={handleSubmit}>
               <div style={{ padding: '24px' }}>
                 <div className="form-group">
@@ -376,10 +388,10 @@ const ManageUsers = () => {
                       type="password" 
                       id="password"
                       className="form-control" 
-                      placeholder="Password"
+                      placeholder={modalType === 'Edit' ? 'Leave blank to keep current' : 'Password'}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      required
+                      required={modalType === 'Add'}
                     />
                   </div>
                 </div>
@@ -394,22 +406,26 @@ const ManageUsers = () => {
                       placeholder="e.g. 9876543210"
                       value={formData.mobileNumber}
                       onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value })}
-                      required
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label" htmlFor="roleId">Assigned Role</label>
+                    <label className="form-label" htmlFor="userTypeId">User Role / Type</label>
                     <select 
-                      id="roleId"
+                      id="userTypeId"
                       className="form-control"
-                      value={formData.roleId}
-                      onChange={(e) => setFormData({ ...formData, roleId: e.target.value })}
+                      value={formData.userTypeId}
+                      onChange={(e) => setFormData({ ...formData, userTypeId: e.target.value })}
                       required
                     >
-                      <option value="">Select Role</option>
-                      <option value="1">Admin</option>
-                      <option value="2">Faculty</option>
-                      <option value="3">Student</option>
+                      {userTypes.map((ut) => {
+                        const utId = ut.userTypeID || ut.userTypeId || ut.UserTypeID;
+                        const utName = ut.userTypeName || ut.UserTypeName;
+                        return (
+                          <option key={utId} value={utId}>
+                            {utName}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 </div>
@@ -419,8 +435,8 @@ const ManageUsers = () => {
                   <select 
                     id="isActive"
                     className="form-control"
-                    value={formData.isActive}
-                    onChange={(e) => setFormData({ ...formData, isActive: e.target.value })}
+                    value={formData.isActive ? 'true' : 'false'}
+                    onChange={(e) => setFormData({ ...formData, isActive: e.target.value === 'true' })}
                     required
                   >
                     <option value="true">Active</option>

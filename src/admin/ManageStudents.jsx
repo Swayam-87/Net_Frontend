@@ -1,92 +1,149 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
+import { getUsers, getUserTypes, createUser, updateUser, deleteUser, getProjectAllocations } from '../services/api';
 
 const ManageStudents = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('Add');
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // Blank form state
+  // Form state
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
+    password: '',
     mobileNumber: '',
-    allocatedProject: '',
-    academicYear: '2026-27',
+    userCode: '',
     isActive: 'true'
   });
 
-  const students = [
-    {
-      studentId: 1,
-      fullName: 'Priya Sharma',
-      email: 'priya.sharma@darshan.ac.in',
-      mobileNumber: '9122334455',
-      project: 'Student Project Management',
-      academicYear: '2026-27',
-      isActive: true
-    },
-    {
-      studentId: 2,
-      fullName: 'Rohan Shah',
-      email: 'rohan.shah@darshan.ac.in',
-      mobileNumber: '9822334466',
-      project: 'E-Commerce Engine',
-      academicYear: '2026-27',
-      isActive: true
-    },
-    {
-      studentId: 3,
-      fullName: 'Neha Mehta',
-      email: 'neha.mehta@darshan.ac.in',
-      mobileNumber: '9766554433',
-      project: 'IoT Smart Home',
-      academicYear: '2025-26',
-      isActive: false
-    },
-    {
-      studentId: 4,
-      fullName: 'Kabir Verma',
-      email: 'kabir.verma@darshan.ac.in',
-      mobileNumber: '9511223344',
-      project: 'None',
-      academicYear: '2026-27',
-      isActive: true
+  const [students, setStudents] = useState([]);
+  const [studentTypeId, setStudentTypeId] = useState(3);
+  const [allocations, setAllocations] = useState([]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [usersRes, typesRes, allocRes] = await Promise.all([
+        getUsers(),
+        getUserTypes(),
+        getProjectAllocations()
+      ]);
+
+      const allTypes = Array.isArray(typesRes) ? typesRes : (typesRes?.data || []);
+      const studType = allTypes.find(t => (t.userTypeName || t.UserTypeName || '').toLowerCase() === 'student');
+      const sTypeId = studType ? (studType.userTypeID || studType.UserTypeID) : 3;
+      setStudentTypeId(sTypeId);
+
+      const allUsers = Array.isArray(usersRes) ? usersRes : (usersRes?.data || []);
+      const studentList = allUsers.filter(u => 
+        (u.userTypeName || u.UserTypeName || '').toLowerCase() === 'student' ||
+        (u.userTypeID || u.UserTypeID) === sTypeId
+      );
+      setStudents(studentList);
+      setAllocations(Array.isArray(allocRes) ? allocRes : (allocRes?.data || []));
+      setErrorMessage('');
+    } catch (err) {
+      console.error('Failed to load students:', err);
+      setErrorMessage(err.message || 'Failed to connect to backend.');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const filteredStudents = students.filter(student => 
-    student.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    student.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    student.project.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const handleOpenModal = (type) => {
+  const filteredStudents = students.filter(student => {
+    const name = student.fullName || student.FullName || '';
+    const email = student.email || student.Email || '';
+    const mobile = student.mobileNumber || student.MobileNumber || '';
+    const code = student.userCode || student.UserCode || '';
+    const q = searchQuery.toLowerCase();
+    return name.toLowerCase().includes(q) || email.toLowerCase().includes(q) || mobile.toLowerCase().includes(q) || code.toLowerCase().includes(q);
+  });
+
+  const handleOpenModal = (type, student = null) => {
     setModalType(type);
-    setFormData({
-      fullName: '',
-      email: '',
-      mobileNumber: '',
-      allocatedProject: '',
-      academicYear: '2026-27',
-      isActive: 'true'
-    });
+    if (student) {
+      setSelectedStudent(student);
+      setFormData({
+        fullName: student.fullName || student.FullName || '',
+        email: student.email || student.Email || '',
+        password: student.password || student.Password || '',
+        mobileNumber: student.mobileNumber || student.MobileNumber || '',
+        userCode: student.userCode || student.UserCode || '',
+        isActive: (student.isActive !== undefined ? student.isActive : true).toString()
+      });
+    } else {
+      setSelectedStudent(null);
+      setFormData({
+        fullName: '',
+        email: '',
+        password: 'password123',
+        mobileNumber: '',
+        userCode: 'STU-' + Math.floor(1000 + Math.random() * 9000),
+        isActive: 'true'
+      });
+    }
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
+    setSelectedStudent(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsModalOpen(false);
+    try {
+      if (modalType === 'Add') {
+        const payload = {
+          userTypeID: studentTypeId,
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          password: formData.password || 'password123',
+          mobileNumber: formData.mobileNumber.trim(),
+          userCode: formData.userCode.trim(),
+          profilePicturePath: 'default.png'
+        };
+        await createUser(payload);
+      } else if (modalType === 'Edit' && selectedStudent) {
+        const id = selectedStudent.userID || selectedStudent.UserID || selectedStudent.studentId;
+        const payload = {
+          userTypeID: studentTypeId,
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          password: formData.password || selectedStudent.password || 'password123',
+          mobileNumber: formData.mobileNumber.trim(),
+          userCode: formData.userCode.trim(),
+          profilePicturePath: selectedStudent.profilePicturePath || 'default.png',
+          isActive: formData.isActive === 'true',
+          isDeleted: false
+        };
+        await updateUser(id, payload);
+      }
+      handleCloseModal();
+      await loadData();
+    } catch (err) {
+      alert(err.message || 'Error saving student record');
+    }
   };
 
-  const handleDeleteClick = (e) => {
-    e.preventDefault();
-    // Do nothing
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this student record?')) {
+      try {
+        await deleteUser(id);
+        await loadData();
+      } catch (err) {
+        alert(err.message || 'Failed to delete student');
+      }
+    }
   };
 
   return (
@@ -111,6 +168,13 @@ const ManageStudents = () => {
           Add Student
         </button>
       </div>
+
+      {/* Error message banner */}
+      {errorMessage && (
+        <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px' }}>
+          <strong>Error connecting to backend:</strong> {errorMessage}
+        </div>
+      )}
 
       {/* Filter and Search */}
       <div className="card" style={{ padding: '16px 20px', marginBottom: '20px' }}>
@@ -140,86 +204,104 @@ const ManageStudents = () => {
               <tr>
                 <th style={{ width: '80px' }}>ID</th>
                 <th>Student Name</th>
+                <th>Enrollment / Code</th>
                 <th>Email Address</th>
                 <th>Mobile</th>
                 <th>Allocated Project</th>
-                <th>Batch/A.Y.</th>
                 <th>Status</th>
                 <th style={{ width: '150px', textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredStudents.length > 0 ? (
-                filteredStudents.map((student) => (
-                  <tr key={student.studentId}>
-                    <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{student.studentId}</span></td>
-                    <td><span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{student.fullName}</span></td>
-                    <td style={{ color: 'var(--text-muted)' }}>{student.email}</td>
-                    <td style={{ color: 'var(--text-muted)' }}>{student.mobileNumber}</td>
-                    <td>
-                      <span style={{ 
-                        fontWeight: 600, 
-                        color: student.project === 'None' ? 'var(--text-muted)' : 'var(--text-main)'
-                      }}>
-                        {student.project}
-                      </span>
-                    </td>
-                    <td style={{ color: 'var(--text-muted)' }}>{student.academicYear}</td>
-                    <td>
-                      <span className={`badge ${student.isActive ? 'completed' : 'rejected'}`}>
-                        {student.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        <button 
-                          onClick={() => handleOpenModal('Edit')}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: 'var(--primary-light)',
-                            color: 'var(--primary)',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                          </svg>
-                          Edit
-                        </button>
-                        <button 
-                          onClick={handleDeleteClick}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#fee2e2',
-                            color: '#ef4444',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                          </svg>
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+              {loading ? (
+                <tr>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                    Loading students from backend...
+                  </td>
+                </tr>
+              ) : filteredStudents.length > 0 ? (
+                filteredStudents.map((student) => {
+                  const id = student.userID || student.UserID || student.studentId;
+                  const name = student.fullName || student.FullName;
+                  const code = student.userCode || student.UserCode || '-';
+                  const email = student.email || student.Email;
+                  const mobile = student.mobileNumber || student.MobileNumber || '-';
+                  const active = student.isActive !== undefined ? student.isActive : true;
+
+                  const alloc = allocations.find(a => (a.studentID || a.StudentID) === id);
+                  const projectTitle = alloc ? (alloc.projectTitle || alloc.ProjectTitle) : 'Unallocated';
+
+                  return (
+                    <tr key={id}>
+                      <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{id}</span></td>
+                      <td><span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{name}</span></td>
+                      <td><span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>{code}</span></td>
+                      <td style={{ color: 'var(--text-muted)' }}>{email}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>{mobile}</td>
+                      <td>
+                        <span style={{ 
+                          fontWeight: 600, 
+                          color: projectTitle === 'Unallocated' ? 'var(--text-muted)' : 'var(--text-main)'
+                        }}>
+                          {projectTitle}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${active ? 'completed' : 'rejected'}`}>
+                          {active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button 
+                            onClick={() => handleOpenModal('Edit', student)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: 'var(--primary-light)',
+                              color: 'var(--primary)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(id)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#fee2e2',
+                              color: '#ef4444',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
@@ -232,7 +314,7 @@ const ManageStudents = () => {
         </div>
       </div>
 
-      {/* Blank Form Modal */}
+      {/* Form Modal */}
       {isModalOpen && (
         <div style={{
           position: 'fixed',
@@ -290,7 +372,7 @@ const ManageStudents = () => {
               </button>
             </div>
 
-            {/* Modal Body (Blank Form) */}
+            {/* Modal Body */}
             <form onSubmit={handleSubmit}>
               <div style={{ padding: '24px' }}>
                 <div className="form-group">
@@ -335,29 +417,27 @@ const ManageStudents = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label" htmlFor="allocatedProject">Allocated Project</label>
-                    <select 
-                      id="allocatedProject"
-                      className="form-control"
-                      value={formData.allocatedProject}
-                      onChange={(e) => setFormData({ ...formData, allocatedProject: e.target.value })}
-                    >
-                      <option value="">None</option>
-                      <option value="Student Project Management">Student Project Management</option>
-                      <option value="E-Commerce Engine">E-Commerce Engine</option>
-                      <option value="IoT Smart Home">IoT Smart Home</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="academicYear">Academic Batch/Year</label>
+                    <label className="form-label" htmlFor="userCode">Student Code / Enrollment</label>
                     <input 
                       type="text" 
-                      id="academicYear"
+                      id="userCode"
                       className="form-control" 
-                      placeholder="e.g. 2026-27"
-                      value={formData.academicYear}
-                      onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
+                      placeholder="e.g. STU-1001"
+                      value={formData.userCode}
+                      onChange={(e) => setFormData({ ...formData, userCode: e.target.value })}
                       required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="password">Account Password</label>
+                    <input 
+                      type="password" 
+                      id="password"
+                      className="form-control" 
+                      placeholder="Enter password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      required={modalType === 'Add'}
                     />
                   </div>
                 </div>

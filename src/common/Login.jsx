@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { loginUser } from '../services/api';
 
 const ROLE_INFO = {
   admin: {
@@ -10,9 +11,9 @@ const ROLE_INFO = {
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
       </svg>
     ),
-    email: 'admin@darshan.ac.in',
+    email: 'aarav.patel@darshan.ac.in',
     password: 'password123',
-    name: 'System Administrator',
+    name: 'Aarav Patel',
     badgeColor: '#4f46e5',
     bgLight: '#e0e7ff',
     details: [
@@ -30,9 +31,9 @@ const ROLE_INFO = {
         <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"></path>
       </svg>
     ),
-    email: 'madhuresh@darshan.ac.in',
+    email: 'madhuresh.fichadiya@darshan.ac.in',
     password: 'password123',
-    name: 'Prof. Madhuresh',
+    name: 'Prof. Madhuresh Fichadiya',
     badgeColor: '#0284c7',
     bgLight: '#e0f2fe',
     details: [
@@ -50,16 +51,15 @@ const ROLE_INFO = {
         <circle cx="12" cy="7" r="4"></circle>
       </svg>
     ),
-    email: 'swayamv87@gmail.com',
+    email: 'priya.sharma@darshan.ac.in',
     password: 'password123',
-    name: 'Swayam Vachhani',
+    name: 'Priya Sharma',
     badgeColor: '#10b981',
     bgLight: '#d1fae5',
     details: [
-      { label: 'Full Name', value: 'Swayam Vachhani' },
-      { label: 'Enrollment No', value: '25010101674' },
-      { label: 'Dept & Sem', value: 'CSE - Sem 5 (Batch A/4)' },
-      { label: 'Mobile No', value: '9428965865' }
+      { label: 'Full Name', value: 'Priya Sharma' },
+      { label: 'Email', value: 'priya.sharma@darshan.ac.in' },
+      { label: 'Role Access', value: 'Student Projects & Tasks' }
     ]
   }
 };
@@ -72,12 +72,15 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleRoleSelect = (roleKey) => {
     setSelectedRole(roleKey);
     setEmail(ROLE_INFO[roleKey].email);
     setPassword(ROLE_INFO[roleKey].password);
     setErrors({});
+    setServerError('');
   };
 
   const validate = () => {
@@ -102,26 +105,35 @@ const Login = () => {
     return Object.keys(tempErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (validate()) {
-      let role = selectedRole;
-      if (email.toLowerCase().includes('faculty')) {
-        role = 'faculty';
-      } else if (email.toLowerCase().includes('admin')) {
-        role = 'admin';
+      setIsSubmitting(true);
+      setServerError('');
+      try {
+        const response = await loginUser({ email, password });
+        const user = response.data || response;
+        const userType = (user.userTypeName || user.UserTypeName || selectedRole).toLowerCase();
+        let targetRole = 'student';
+        if (userType.includes('admin')) targetRole = 'admin';
+        else if (userType.includes('faculty')) targetRole = 'faculty';
+
+        localStorage.setItem('currentUser', JSON.stringify({
+          userId: user.userID || user.userId || user.UserID,
+          role: targetRole,
+          name: user.fullName || user.FullName || 'User',
+          email: user.email || user.Email,
+          userTypeName: user.userTypeName || user.UserTypeName,
+          profilePicturePath: user.profilePicturePath || ''
+        }));
+
+        navigate(`/${targetRole}/dashboard`);
+      } catch (err) {
+        console.error('Login error:', err);
+        setServerError(err.message || 'Invalid email or password.');
+      } finally {
+        setIsSubmitting(false);
       }
-
-      // Save user session in localStorage
-      const activeInfo = ROLE_INFO[role] || ROLE_INFO[selectedRole];
-      localStorage.setItem('currentUser', JSON.stringify({
-        role: role,
-        name: activeInfo.name,
-        email: email,
-        title: activeInfo.roleLabel
-      }));
-
-      navigate(`/${role}/dashboard`);
     }
   };
 
@@ -290,6 +302,13 @@ const Login = () => {
               ))}
             </div>
           </div>
+
+          {/* Server Error Alert */}
+          {serverError && (
+            <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '18px', fontSize: '0.85rem', fontWeight: 600 }}>
+              {serverError}
+            </div>
+          )}
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} noValidate>

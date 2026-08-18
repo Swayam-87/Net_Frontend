@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
+import {
+  getTasks,
+  getProjectAllocations,
+  getTaskStatuses,
+  getTaskPriorities,
+  createTask,
+  updateTask,
+  deleteTask
+} from '../services/api';
 
 const ManageTasks = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('Add'); // 'Add', 'Edit', 'Details'
   const [selectedTask, setSelectedTask] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -27,104 +38,61 @@ const ManageTasks = () => {
   const [statusesList, setStatusesList] = useState([]);
   const [prioritiesList, setPrioritiesList] = useState([]);
 
-  const fetchTasks = async () => {
+  const loadData = async () => {
     try {
-      const response = await fetch("https://localhost:7173/api/SPM_Task");
-      const json = await response.json();
-      const data = json.data ? json.data : (Array.isArray(json) ? json : []);
-      const normalized = data.map(t => ({
-        taskID: t.taskID || t.taskId,
-        projectAllocationID: t.projectAllocationID || t.projectAllocationId,
-        projectTitle: t.projectTitle || '',
-        studentName: t.studentName || '',
-        taskTitle: t.taskTitle || '',
-        taskDescription: t.taskDescription || '',
-        assignedScore: t.assignedScore || 0,
-        obtainedScore: t.earnedScore || 0,
-        dueDate: t.taskDueDate ? t.taskDueDate.substring(0, 10) : '',
-        submissionDate: t.taskCompletedDate ? t.taskCompletedDate.substring(0, 10) : '',
-        facultyRemarks: t.facultyRemarks || '',
-        taskStatusID: t.taskStatusID || t.taskStatusId,
-        taskStatusName: t.taskStatusName || 'Pending',
-        taskStatusCss: (t.taskStatusName || 'pending').toLowerCase().replace(/\s+/g, '-'),
-        taskPriorityID: t.taskPriorityID || t.taskPriorityId,
-        taskPriorityName: t.taskPriorityName || 'Medium',
-        taskPriorityCss: (t.taskPriorityName || 'medium').toLowerCase()
-      }));
-      setTasks(normalized);
-    } catch (error) {
-      console.error("Error fetching tasks:", error);
-    }
-  };
-
-  const fetchDropdowns = async () => {
-    try {
-      const [resAlloc, resStatus, resPriority] = await Promise.all([
-        fetch("https://localhost:7173/api/ProjectAllocation"),
-        fetch("https://localhost:7173/api/TaskStatus"),
-        fetch("https://localhost:7173/api/TaskPriority")
+      setLoading(true);
+      const [tasksRes, allocRes, statusRes, priorityRes] = await Promise.all([
+        getTasks(),
+        getProjectAllocations(),
+        getTaskStatuses(),
+        getTaskPriorities()
       ]);
-      const jsonAlloc = await resAlloc.json();
-      const jsonStatus = await resStatus.json();
-      const jsonPriority = await resPriority.json();
 
-      const allocData = jsonAlloc.data ? jsonAlloc.data : (Array.isArray(jsonAlloc) ? jsonAlloc : []);
-      const statusData = jsonStatus.data ? jsonStatus.data : (Array.isArray(jsonStatus) ? jsonStatus : []);
-      const priorityData = jsonPriority.data ? jsonPriority.data : (Array.isArray(jsonPriority) ? jsonPriority : []);
-
-      setAllocationsList(allocData.map(a => ({
-        projectAllocationID: a.projectAllocationID || a.projectAllocationId,
-        projectTitle: a.projectTitle || '',
-        studentName: a.studentName || ''
-      })));
-
-      setStatusesList(statusData.map(s => ({
-        statusID: s.taskStatusID || s.taskStatusId,
-        name: s.taskStatusName,
-        css: s.taskStatusCssClass || 'pending'
-      })));
-
-      setPrioritiesList(priorityData.map(p => ({
-        priorityID: p.taskPriorityID || p.taskPriorityId,
-        name: p.taskPriorityName,
-        css: p.taskPriorityCssClass || 'medium'
-      })));
-    } catch (error) {
-      console.error("Error fetching dropdowns for tasks:", error);
+      setTasks(Array.isArray(tasksRes) ? tasksRes : (tasksRes?.data || []));
+      setAllocationsList(Array.isArray(allocRes) ? allocRes : (allocRes?.data || []));
+      setStatusesList(Array.isArray(statusRes) ? statusRes : (statusRes?.data || []));
+      setPrioritiesList(Array.isArray(priorityRes) ? priorityRes : (priorityRes?.data || []));
+      setErrorMessage('');
+    } catch (err) {
+      console.error('Failed to load tasks:', err);
+      setErrorMessage(err.message || 'Failed to connect to backend.');
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTasks();
-    fetchDropdowns();
+    loadData();
   }, []);
 
-  const filteredTasks = tasks.filter(task => 
-    (task.taskTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (task.projectTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (task.studentName || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTasks = tasks.filter(task => {
+    const title = task.taskTitle || task.TaskTitle || '';
+    const project = task.projectTitle || task.ProjectTitle || '';
+    const student = task.studentName || task.StudentName || '';
+    const q = searchQuery.toLowerCase();
+    return title.toLowerCase().includes(q) || project.toLowerCase().includes(q) || student.toLowerCase().includes(q);
+  });
 
   const handleOpenModal = (type, task = null) => {
     setModalType(type);
     if (task) {
       setSelectedTask(task);
       setFormData({
-        projectAllocationID: (task.projectAllocationID || '').toString(),
-        taskTitle: task.taskTitle || '',
-        taskDescription: task.taskDescription || '',
-        assignedScore: (task.assignedScore || 10).toString(),
-        obtainedScore: (task.obtainedScore || 0).toString(),
-        dueDate: task.dueDate || '',
-        submissionDate: task.submissionDate || '',
-        facultyRemarks: task.facultyRemarks || '',
-        taskStatusID: (task.taskStatusID || '').toString(),
-        taskPriorityID: (task.taskPriorityID || '').toString()
+        projectAllocationID: (task.projectAllocationID || task.ProjectAllocationID || '').toString(),
+        taskTitle: task.taskTitle || task.TaskTitle || '',
+        taskDescription: task.taskDescription || task.TaskDescription || '',
+        assignedScore: (task.assignedScore || task.AssignedScore || 10).toString(),
+        obtainedScore: (task.earnedScore || task.EarnedScore || task.obtainedScore || 0).toString(),
+        dueDate: (task.taskDueDate || task.TaskDueDate || task.dueDate) ? (task.taskDueDate || task.TaskDueDate || task.dueDate).substring(0, 10) : '',
+        submissionDate: (task.taskCompletedDate || task.TaskCompletedDate || task.submissionDate) ? (task.taskCompletedDate || task.TaskCompletedDate || task.submissionDate).substring(0, 10) : '',
+        facultyRemarks: task.facultyRemarks || task.FacultyRemarks || '',
+        taskStatusID: (task.taskStatusID || task.TaskStatusID || '').toString(),
+        taskPriorityID: (task.taskPriorityID || task.TaskPriorityID || '').toString()
       });
     } else {
       setSelectedTask(null);
       setFormData({
-        projectAllocationID: allocationsList.length > 0 ? allocationsList[0].projectAllocationID.toString() : '',
+        projectAllocationID: allocationsList.length > 0 ? (allocationsList[0].projectAllocationID || allocationsList[0].ProjectAllocationID).toString() : '',
         taskTitle: '',
         taskDescription: '',
         assignedScore: '10',
@@ -132,8 +100,8 @@ const ManageTasks = () => {
         dueDate: new Date(Date.now() + 7 * 86400000).toISOString().substring(0, 10),
         submissionDate: '',
         facultyRemarks: '',
-        taskStatusID: statusesList.length > 0 ? statusesList[0].statusID.toString() : '1',
-        taskPriorityID: prioritiesList.length > 0 ? prioritiesList[0].priorityID.toString() : '1'
+        taskStatusID: statusesList.length > 0 ? (statusesList[0].taskStatusID || statusesList[0].TaskStatusID || statusesList[0].statusID).toString() : '1',
+        taskPriorityID: prioritiesList.length > 0 ? (prioritiesList[0].taskPriorityID || prioritiesList[0].TaskPriorityID || prioritiesList[0].priorityID).toString() : '1'
       });
     }
     setIsModalOpen(true);
@@ -148,49 +116,50 @@ const ManageTasks = () => {
     e.preventDefault();
     try {
       if (modalType === 'Add') {
-        await fetch("https://localhost:7173/api/SPM_Task", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectAllocationID: parseInt(formData.projectAllocationID),
-            taskTitle: formData.taskTitle,
-            taskDescription: formData.taskDescription,
-            taskStatusID: parseInt(formData.taskStatusID),
-            taskPriorityID: parseInt(formData.taskPriorityID),
-            assignedScore: parseInt(formData.assignedScore) || 0,
-            taskAssignedDate: new Date().toISOString(),
-            taskDueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : new Date().toISOString()
-          })
-        });
+        const payload = {
+          projectAllocationID: parseInt(formData.projectAllocationID),
+          taskTitle: formData.taskTitle.trim(),
+          taskDescription: formData.taskDescription.trim(),
+          taskStatusID: parseInt(formData.taskStatusID),
+          taskPriorityID: parseInt(formData.taskPriorityID),
+          assignedScore: parseFloat(formData.assignedScore) || 10,
+          taskAssignedDate: new Date().toISOString(),
+          taskDueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : null
+        };
+        await createTask(payload);
       } else if (modalType === 'Edit' && selectedTask) {
-        const id = selectedTask.taskID || selectedTask.taskId;
-        await fetch(`https://localhost:7173/api/SPM_Task/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectAllocationID: parseInt(formData.projectAllocationID),
-            taskTitle: formData.taskTitle,
-            taskDescription: formData.taskDescription,
-            taskStatusID: parseInt(formData.taskStatusID),
-            taskPriorityID: parseInt(formData.taskPriorityID),
-            assignedScore: parseInt(formData.assignedScore) || 0,
-            earnedScore: parseInt(formData.obtainedScore) || 0,
-            taskDueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : new Date().toISOString(),
-            taskCompletedDate: formData.submissionDate ? new Date(formData.submissionDate).toISOString() : null,
-            facultyRemarks: formData.facultyRemarks
-          })
-        });
+        const id = selectedTask.taskID || selectedTask.TaskID;
+        const payload = {
+          projectAllocationID: parseInt(formData.projectAllocationID),
+          taskTitle: formData.taskTitle.trim(),
+          taskDescription: formData.taskDescription.trim(),
+          taskStatusID: parseInt(formData.taskStatusID),
+          taskPriorityID: parseInt(formData.taskPriorityID),
+          assignedScore: parseFloat(formData.assignedScore) || 10,
+          earnedScore: parseFloat(formData.obtainedScore) || 0,
+          progressPercentage: parseFloat(formData.obtainedScore) && parseFloat(formData.assignedScore) ? Math.min(100, Math.round((parseFloat(formData.obtainedScore) / parseFloat(formData.assignedScore)) * 100)) : 0,
+          taskAssignedDate: selectedTask.taskAssignedDate || new Date().toISOString(),
+          taskDueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : null,
+          taskCompletedDate: formData.submissionDate ? new Date(formData.submissionDate).toISOString() : null,
+          facultyRemarks: formData.facultyRemarks || null
+        };
+        await updateTask(id, payload);
       }
-      fetchTasks();
       handleCloseModal();
-    } catch (error) {
-      console.error("Error saving task:", error);
+      await loadData();
+    } catch (err) {
+      alert(err.message || 'Error saving task');
     }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this task?')) {
-      setTasks(tasks.filter(t => t.taskID !== id));
+      try {
+        await deleteTask(id);
+        await loadData();
+      } catch (err) {
+        alert(err.message || 'Failed to delete task');
+      }
     }
   };
 
@@ -216,6 +185,13 @@ const ManageTasks = () => {
           Add Task
         </button>
       </div>
+
+      {/* Error message banner */}
+      {errorMessage && (
+        <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px' }}>
+          <strong>Error connecting to backend:</strong> {errorMessage}
+        </div>
+      )}
 
       {/* Filter and Search */}
       <div className="card" style={{ padding: '16px 20px', marginBottom: '20px' }}>
@@ -255,103 +231,122 @@ const ManageTasks = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredTasks.length > 0 ? (
-                filteredTasks.map((task) => (
-                  <tr key={task.taskID}>
-                    <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{task.taskID}</span></td>
-                    <td>
-                      <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{task.taskTitle}</span>
-                    </td>
-                    <td>
-                      <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>{task.projectTitle}</span>
-                    </td>
-                    <td><span style={{ fontWeight: 500 }}>{task.studentName}</span></td>
-                    <td>
-                      <span className={`badge ${task.taskPriorityCss}`}>
-                        {task.taskPriorityName}
-                      </span>
-                    </td>
-                    <td style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{task.dueDate}</td>
-                    <td>
-                      <span style={{ fontWeight: 600 }}>{task.obtainedScore} / {task.assignedScore} pts</span>
-                    </td>
-                    <td>
-                      <span className={`badge ${task.taskStatusCss}`}>
-                        {task.taskStatusName}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        <button 
-                          onClick={() => handleOpenModal('Details', task)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#e0f2fe',
-                            color: '#0369a1',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                          </svg>
-                          View
-                        </button>
-                        <button 
-                          onClick={() => handleOpenModal('Edit', task)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: 'var(--primary-light)',
-                            color: 'var(--primary)',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                          </svg>
-                          Edit
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(task.taskID)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#fee2e2',
-                            color: '#ef4444',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                          </svg>
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+              {loading ? (
+                <tr>
+                  <td colSpan="9" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                    Loading tasks from backend...
+                  </td>
+                </tr>
+              ) : filteredTasks.length > 0 ? (
+                filteredTasks.map((task) => {
+                  const id = task.taskID || task.TaskID;
+                  const title = task.taskTitle || task.TaskTitle;
+                  const project = task.projectTitle || task.ProjectTitle || '-';
+                  const student = task.studentName || task.StudentName || '-';
+                  const priorityName = task.taskPriorityName || task.TaskPriorityName || 'Medium';
+                  const priorityCss = priorityName.toLowerCase().replace(/\s+/g, '-');
+                  const dueDate = (task.taskDueDate || task.TaskDueDate || task.dueDate) ? (task.taskDueDate || task.TaskDueDate || task.dueDate).substring(0, 10) : '-';
+                  const assignedScore = task.assignedScore || task.AssignedScore || 0;
+                  const earnedScore = task.earnedScore !== undefined && task.earnedScore !== null ? task.earnedScore : (task.EarnedScore !== undefined ? task.EarnedScore : (task.obtainedScore || 0));
+                  const statusName = task.taskStatusName || task.TaskStatusName || 'Pending';
+                  const statusCss = statusName.toLowerCase().replace(/\s+/g, '-');
+                  return (
+                    <tr key={id}>
+                      <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{id}</span></td>
+                      <td>
+                        <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{title}</span>
+                      </td>
+                      <td>
+                        <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>{project}</span>
+                      </td>
+                      <td><span style={{ fontWeight: 500 }}>{student}</span></td>
+                      <td>
+                        <span className={`badge ${priorityCss}`}>
+                          {priorityName}
+                        </span>
+                      </td>
+                      <td style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{dueDate}</td>
+                      <td>
+                        <span style={{ fontWeight: 600 }}>{earnedScore} / {assignedScore} pts</span>
+                      </td>
+                      <td>
+                        <span className={`badge ${statusCss}`}>
+                          {statusName}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button 
+                            onClick={() => handleOpenModal('Details', task)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#e0f2fe',
+                              color: '#0369a1',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                              <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            View
+                          </button>
+                          <button 
+                            onClick={() => handleOpenModal('Edit', task)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: 'var(--primary-light)',
+                              color: 'var(--primary)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(id)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#fee2e2',
+                              color: '#ef4444',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan="9" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
@@ -523,11 +518,16 @@ const ManageTasks = () => {
                       required
                     >
                       <option value="">Select Allocation...</option>
-                      {allocationsList.map(a => (
-                        <option key={a.projectAllocationID} value={a.projectAllocationID}>
-                          {a.studentName} - {a.projectTitle}
-                        </option>
-                      ))}
+                      {allocationsList.map(a => {
+                        const aId = a.projectAllocationID || a.ProjectAllocationID;
+                        const sName = a.studentName || a.StudentName || 'Student';
+                        const pTitle = a.projectTitle || a.ProjectTitle || 'Project';
+                        return (
+                          <option key={aId} value={aId}>
+                            {sName} - {pTitle}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
@@ -568,9 +568,13 @@ const ManageTasks = () => {
                         onChange={(e) => setFormData({ ...formData, taskStatusID: e.target.value })}
                         required
                       >
-                        {statusesList.map(s => (
-                          <option key={s.statusID} value={s.statusID}>{s.name}</option>
-                        ))}
+                        {statusesList.map(s => {
+                          const sId = s.taskStatusID || s.statusID || s.TaskStatusID;
+                          const sName = s.taskStatusName || s.name || s.TaskStatusName;
+                          return (
+                            <option key={sId} value={sId}>{sName}</option>
+                          );
+                        })}
                       </select>
                     </div>
                     <div className="form-group">
@@ -582,9 +586,13 @@ const ManageTasks = () => {
                         onChange={(e) => setFormData({ ...formData, taskPriorityID: e.target.value })}
                         required
                       >
-                        {prioritiesList.map(p => (
-                          <option key={p.priorityID} value={p.priorityID}>{p.name}</option>
-                        ))}
+                        {prioritiesList.map(p => {
+                          const pId = p.taskPriorityID || p.priorityID || p.TaskPriorityID;
+                          const pName = p.taskPriorityName || p.name || p.TaskPriorityName;
+                          return (
+                            <option key={pId} value={pId}>{pName}</option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>

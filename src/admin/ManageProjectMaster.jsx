@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
+import { getProjects, createProject, updateProject, deleteProject } from '../services/api';
 
 const ManageProjectMaster = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('Add'); // 'Add', 'Edit', 'Details'
   const [selectedProject, setSelectedProject] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -16,38 +19,38 @@ const ManageProjectMaster = () => {
 
   const [projects, setProjects] = useState([]);
 
-  const fetchProjects = async () => {
+  const loadData = async () => {
     try {
-      const response = await fetch("https://localhost:7173/api/ProjectMaster");
-      const json = await response.json();
-      const data = json.data ? json.data : (Array.isArray(json) ? json : []);
-      const normalized = data.map(p => ({
-        projectID: p.projectID || p.projectId,
-        projectTitle: p.projectTitle || '',
-        description: p.description || ''
-      }));
-      setProjects(normalized);
-    } catch (error) {
-      console.error("Error fetching projects:", error);
+      setLoading(true);
+      const res = await getProjects();
+      setProjects(Array.isArray(res) ? res : (res?.data || []));
+      setErrorMessage('');
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+      setErrorMessage(err.message || 'Failed to connect to backend.');
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchProjects();
+    loadData();
   }, []);
 
-  const filteredProjects = projects.filter(p => 
-    (p.projectTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.description || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProjects = projects.filter(p => {
+    const title = p.projectTitle || p.ProjectTitle || '';
+    const desc = p.description || p.Description || '';
+    const q = searchQuery.toLowerCase();
+    return title.toLowerCase().includes(q) || desc.toLowerCase().includes(q);
+  });
 
   const handleOpenModal = (type, p = null) => {
     setModalType(type);
     if (p) {
       setSelectedProject(p);
       setFormData({
-        projectTitle: p.projectTitle || '',
-        description: p.description || ''
+        projectTitle: p.projectTitle || p.ProjectTitle || '',
+        description: p.description || p.Description || ''
       });
     } else {
       setSelectedProject(null);
@@ -67,42 +70,31 @@ const ManageProjectMaster = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const payload = {
+        projectTitle: formData.projectTitle.trim(),
+        description: formData.description.trim()
+      };
+
       if (modalType === 'Add') {
-        await fetch("https://localhost:7173/api/ProjectMaster", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectTitle: formData.projectTitle,
-            description: formData.description
-          })
-        });
+        await createProject(payload);
       } else if (modalType === 'Edit' && selectedProject) {
-        const id = selectedProject.projectID || selectedProject.projectId;
-        await fetch(`https://localhost:7173/api/ProjectMaster/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectTitle: formData.projectTitle,
-            description: formData.description
-          })
-        });
+        const id = selectedProject.projectID || selectedProject.projectId || selectedProject.ProjectID;
+        await updateProject(id, payload);
       }
-      fetchProjects();
       handleCloseModal();
-    } catch (error) {
-      console.error("Error saving project:", error);
+      await loadData();
+    } catch (err) {
+      alert(err.message || 'Error saving project');
     }
   };
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this Project Master record?')) {
       try {
-        await fetch(`https://localhost:7173/api/ProjectMaster/${id}`, {
-          method: "DELETE"
-        });
-        fetchProjects();
-      } catch (error) {
-        console.error("Error deleting project:", error);
+        await deleteProject(id);
+        await loadData();
+      } catch (err) {
+        alert(err.message || 'Failed to delete project');
       }
     }
   };
@@ -129,6 +121,13 @@ const ManageProjectMaster = () => {
           Add Project definition
         </button>
       </div>
+
+      {/* Error message banner */}
+      {errorMessage && (
+        <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px' }}>
+          <strong>Error connecting to backend:</strong> {errorMessage}
+        </div>
+      )}
 
       {/* Filter and Search */}
       <div className="card" style={{ padding: '16px 20px', marginBottom: '20px' }}>
@@ -163,90 +162,101 @@ const ManageProjectMaster = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredProjects.length > 0 ? (
-                filteredProjects.map((p) => (
-                  <tr key={p.projectID}>
-                    <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{p.projectID}</span></td>
-                    <td>
-                      <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{p.projectTitle}</span>
-                    </td>
-                    <td style={{ color: 'var(--text-muted)', lineHeight: '1.4' }}>{p.description}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        <button 
-                          onClick={() => handleOpenModal('Details', p)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#e0f2fe',
-                            color: '#0369a1',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                          </svg>
-                          View
-                        </button>
-                        <button 
-                          onClick={() => handleOpenModal('Edit', p)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: 'var(--primary-light)',
-                            color: 'var(--primary)',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                          </svg>
-                          Edit
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(p.projectID)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#fee2e2',
-                            color: '#ef4444',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                          </svg>
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+              {loading ? (
+                <tr>
+                  <td colSpan="4" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                    Loading project definitions from backend...
+                  </td>
+                </tr>
+              ) : filteredProjects.length > 0 ? (
+                filteredProjects.map((p) => {
+                  const id = p.projectID || p.projectId || p.ProjectID;
+                  const title = p.projectTitle || p.ProjectTitle;
+                  const desc = p.description || p.Description || '-';
+                  return (
+                    <tr key={id}>
+                      <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{id}</span></td>
+                      <td>
+                        <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{title}</span>
+                      </td>
+                      <td style={{ color: 'var(--text-muted)', lineHeight: '1.4' }}>{desc}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button 
+                            onClick={() => handleOpenModal('Details', p)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#e0f2fe',
+                              color: '#0369a1',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                              <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            View
+                          </button>
+                          <button 
+                            onClick={() => handleOpenModal('Edit', p)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: 'var(--primary-light)',
+                              color: '#007bff',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(id)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#fee2e2',
+                              color: '#ef4444',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan="4" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                    No projects definitions found matching "{searchQuery}"
+                    No project records found matching "{searchQuery}"
                   </td>
                 </tr>
               )}

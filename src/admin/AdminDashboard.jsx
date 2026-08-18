@@ -1,90 +1,144 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
+import {
+  getDashboardTotalStudents,
+  getDashboardTotalFacultiesGuiding,
+  getDashboardTotalProjects,
+  getDashboardTasksByStatus,
+  getDashboardTasksByPriority,
+  getDashboardTopStudents,
+  getDashboardMonthwiseCompletedTasks,
+  getDashboardProjectTaskSummary
+} from '../services/api';
 
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
 
   // Core Analytics States
   const [metrics, setMetrics] = useState({
-    totalStudents: 12,
-    totalFaculty: 4,
-    totalProjects: 5,
-    completedTasks: 21,
-    totalTasks: 25,
-    completionRate: 84
+    totalStudents: 0,
+    totalFaculty: 0,
+    totalProjects: 0,
+    completedTasks: 0,
+    totalTasks: 0,
+    completionRate: 0
   });
 
   // Chart Data States
-  const [statusDistribution, setStatusDistribution] = useState([
-    { status: 'Completed', count: 12, percentage: 57, color: '#10b981' },
-    { status: 'In Progress', count: 5, percentage: 24, color: '#3b82f6' },
-    { status: 'Pending', count: 3, percentage: 14, color: '#f59e0b' },
-    { status: 'Rejected', count: 1, percentage: 5, color: '#ef4444' }
-  ]);
-
-  const [priorityBreakdown, setPriorityBreakdown] = useState([
-    { priority: 'High Priority', count: 8, percentage: 38, color: '#ef4444' },
-    { priority: 'Medium Priority', count: 9, percentage: 43, color: '#f59e0b' },
-    { priority: 'Low Priority', count: 4, percentage: 19, color: '#3b82f6' }
-  ]);
-
-  const [monthlyVelocity, setMonthlyVelocity] = useState([
-    { month: 'May', completed: 15, height: '35%' },
-    { month: 'Jun', completed: 28, height: '65%' },
-    { month: 'Jul', completed: 42, height: '95%' },
-    { month: 'Aug', completed: 30, height: '70%' },
-    { month: 'Sep', completed: 36, height: '82%' }
-  ]);
-
-  const [topPerformers, setTopPerformers] = useState([
-    { name: 'Karan Trivedi', project: 'AI Healthcare Diagnostics', score: 25.0, grade: 'A+' },
-    { name: 'Priya Sharma', project: 'Student Project Management', score: 21.5, grade: 'A+' },
-    { name: 'Rohan Shah', project: 'E-Commerce Engine', score: 18.0, grade: 'A' },
-    { name: 'Yash Rathod', project: 'IoT Smart Home Dashboard', score: 16.5, grade: 'A' },
-    { name: 'Ananya Joshi', project: 'Smart Library Portal', score: 14.0, grade: 'B+' }
-  ]);
-
-  const [projectHealth, setProjectHealth] = useState([
-    { title: 'AI Healthcare Diagnostics', progress: 100, status: 'Completed', color: '#10b981' },
-    { title: 'Student Project Management System', progress: 80, status: 'On Track', color: '#3b82f6' },
-    { title: 'E-Commerce Engine', progress: 75, status: 'On Track', color: '#3b82f6' },
-    { title: 'Smart Library Portal', progress: 65, status: 'In Progress', color: '#f59e0b' },
-    { title: 'IoT Smart Home Dashboard', progress: 30, status: 'Needs Attention', color: '#ef4444' }
-  ]);
+  const [statusDistribution, setStatusDistribution] = useState([]);
+  const [priorityBreakdown, setPriorityBreakdown] = useState([]);
+  const [monthlyVelocity, setMonthlyVelocity] = useState([]);
+  const [topPerformers, setTopPerformers] = useState([]);
+  const [projectHealth, setProjectHealth] = useState([]);
 
   const fetchAnalytics = async () => {
-    setLoading(true);
     try {
-      const [resStudents, resProjects, resStatus] = await Promise.allSettled([
-        fetch('https://localhost:7173/api/Dashboard/total-students').then(r => r.json()),
-        fetch('https://localhost:7173/api/Dashboard/total-projects').then(r => r.json()),
-        fetch('https://localhost:7173/api/Dashboard/tasks-by-status').then(r => r.json())
+      setLoading(true);
+      const [
+        studentsRes,
+        facultyRes,
+        projectsRes,
+        statusRes,
+        priorityRes,
+        topRes,
+        monthRes,
+        summaryRes
+      ] = await Promise.allSettled([
+        getDashboardTotalStudents(),
+        getDashboardTotalFacultiesGuiding(),
+        getDashboardTotalProjects(),
+        getDashboardTasksByStatus(),
+        getDashboardTasksByPriority(),
+        getDashboardTopStudents(),
+        getDashboardMonthwiseCompletedTasks(),
+        getDashboardProjectTaskSummary()
       ]);
 
-      if (resStudents.status === 'fulfilled' && resStudents.value?.totalStudents) {
-        setMetrics(m => ({ ...m, totalStudents: resStudents.value.totalStudents }));
-      }
-      if (resProjects.status === 'fulfilled' && resProjects.value?.totalProjects) {
-        setMetrics(m => ({ ...m, totalProjects: resProjects.value.totalProjects }));
-      }
-      if (resStatus.status === 'fulfilled' && Array.isArray(resStatus.value) && resStatus.value.length > 0) {
-        const total = resStatus.value.reduce((acc, curr) => acc + (curr.tasks || 0), 0);
-        if (total > 0) {
-          const colors = { Completed: '#10b981', 'In Progress': '#3b82f6', Pending: '#f59e0b', Rejected: '#ef4444' };
-          const mapped = resStatus.value.map(item => ({
-            status: item.status || item.Status,
-            count: item.tasks || item.Tasks,
-            percentage: Math.round(((item.tasks || item.Tasks) / total) * 100),
-            color: colors[item.status || item.Status] || '#64748b'
-          }));
-          setStatusDistribution(mapped);
+      const totalStudents = studentsRes.status === 'fulfilled' ? (studentsRes.value?.totalStudents || studentsRes.value?.TotalStudents || 0) : 0;
+      const totalFaculty = facultyRes.status === 'fulfilled' ? (facultyRes.value?.totalFacultiesGuiding || facultyRes.value?.TotalFacultiesGuiding || 0) : 0;
+      const totalProjects = projectsRes.status === 'fulfilled' ? (projectsRes.value?.totalProjects || projectsRes.value?.TotalProjects || 0) : 0;
+
+      // Status breakdown
+      let statusList = statusRes.status === 'fulfilled' && Array.isArray(statusRes.value) ? statusRes.value : [];
+      let totalTasksCount = 0;
+      let completedTasksCount = 0;
+      const colorMap = { 'Completed': '#10b981', 'In Progress': '#3b82f6', 'Pending': '#f59e0b', 'Rejected': '#ef4444' };
+
+      statusList.forEach(s => {
+        const count = s.tasks || s.Tasks || 0;
+        totalTasksCount += count;
+        if ((s.status || s.Status || '').toLowerCase() === 'completed') {
+          completedTasksCount += count;
         }
+      });
+
+      const formattedStatus = statusList.map(s => {
+        const name = s.status || s.Status || 'Other';
+        const count = s.tasks || s.Tasks || 0;
+        const pct = totalTasksCount > 0 ? Math.round((count / totalTasksCount) * 100) : 0;
+        return { status: name, count, percentage: pct, color: colorMap[name] || '#6366f1' };
+      });
+      if (formattedStatus.length > 0) setStatusDistribution(formattedStatus);
+
+      // Priority breakdown
+      let priorityList = priorityRes.status === 'fulfilled' && Array.isArray(priorityRes.value) ? priorityRes.value : [];
+      const pColorMap = { 'High': '#ef4444', 'Medium': '#f59e0b', 'Low': '#3b82f6' };
+      let totalPriorityCount = priorityList.reduce((acc, p) => acc + (p.tasks || p.Tasks || 0), 0);
+      const formattedPriority = priorityList.map(p => {
+        const name = p.priority || p.Priority || 'Normal';
+        const count = p.tasks || p.Tasks || 0;
+        const pct = totalPriorityCount > 0 ? Math.round((count / totalPriorityCount) * 100) : 0;
+        return { priority: name, count, percentage: pct, color: pColorMap[name] || '#8b5cf6' };
+      });
+      if (formattedPriority.length > 0) setPriorityBreakdown(formattedPriority);
+
+      // Monthly Velocity
+      if (monthRes.status === 'fulfilled' && Array.isArray(monthRes.value) && monthRes.value.length > 0) {
+        const maxTasks = Math.max(...monthRes.value.map(m => m.completedTasks || m.CompletedTasks || 1), 1);
+        setMonthlyVelocity(monthRes.value.map(m => ({
+          month: m.month || m.Month || 'Month',
+          completed: m.completedTasks || m.CompletedTasks || 0,
+          height: `${Math.round(((m.completedTasks || m.CompletedTasks || 0) / maxTasks) * 80) + 15}%`
+        })));
       }
+
+      // Top performers
+      if (topRes.status === 'fulfilled' && Array.isArray(topRes.value) && topRes.value.length > 0) {
+        setTopPerformers(topRes.value.map(t => ({
+          name: t.student || t.Student || 'Student',
+          project: 'Project Allocation',
+          score: t.avgScore || t.AvgScore || 0,
+          grade: (t.avgScore || t.AvgScore || 0) >= 80 ? 'A+' : (t.avgScore || t.AvgScore || 0) >= 60 ? 'A' : 'B+'
+        })));
+      }
+
+      // Project health
+      if (summaryRes.status === 'fulfilled' && Array.isArray(summaryRes.value) && summaryRes.value.length > 0) {
+        setProjectHealth(summaryRes.value.slice(0, 5).map(p => {
+          const prog = parseInt(p.avgProgress || p.AvgProgress || '0', 10);
+          return {
+            title: p.project || p.Project || 'Project',
+            progress: prog,
+            status: prog >= 100 ? 'Completed' : prog >= 50 ? 'On Track' : 'In Progress',
+            color: prog >= 100 ? '#10b981' : prog >= 50 ? '#3b82f6' : '#f59e0b'
+          };
+        }));
+      }
+
+      setMetrics({
+        totalStudents,
+        totalFaculty,
+        totalProjects,
+        completedTasks: completedTasksCount,
+        totalTasks: totalTasksCount,
+        completionRate: totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0
+      });
     } catch (err) {
-      console.log('Analytics endpoint offline, rendering visual charts report.');
+      console.error('Failed to fetch dashboard metrics:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {

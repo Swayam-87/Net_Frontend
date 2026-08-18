@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
+import {
+  getProjectAllocations,
+  getProjects,
+  getUsers,
+  createProjectAllocation,
+  updateProjectAllocation,
+  deleteProjectAllocation
+} from '../services/api';
 
 const ManageProjectAllocations = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('Add'); // 'Add', 'Edit', 'Details'
   const [selectedAllocation, setSelectedAllocation] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -27,93 +37,70 @@ const ManageProjectAllocations = () => {
   const [studentsList, setStudentsList] = useState([]);
   const [facultyList, setFacultyList] = useState([]);
 
-  const fetchAllocations = async () => {
+  const loadData = async () => {
     try {
-      const response = await fetch("https://localhost:7173/api/ProjectAllocation");
-      const json = await response.json();
-      const data = json.data ? json.data : (Array.isArray(json) ? json : []);
-      const normalized = data.map(pa => ({
-        projectAllocationID: pa.projectAllocationID || pa.projectAllocationId,
-        projectID: pa.projectID || pa.projectId,
-        projectTitle: pa.projectTitle || '',
-        studentID: pa.studentID || pa.studentId,
-        studentName: pa.studentName || '',
-        facultyID: pa.facultyID || pa.facultyId,
-        facultyName: pa.facultyName || '',
-        assignedDate: pa.assignedDate ? pa.assignedDate.substring(0, 10) : '',
-        projectStartDate: pa.projectStartDate ? pa.projectStartDate.substring(0, 10) : '',
-        projectEndDate: pa.projectEndDate ? pa.projectEndDate.substring(0, 10) : '',
-        totalTasksGiven: pa.totalTasksGiven || 0,
-        totalCompletedTasks: pa.totalCompletedTasks || 0,
-        completionPercentage: pa.progressPercentage || 0,
-        overAllGrade: pa.overAllGrade || ''
-      }));
-      setAllocations(normalized);
-    } catch (error) {
-      console.error("Error fetching allocations:", error);
-    }
-  };
-
-  const fetchDropdownData = async () => {
-    try {
-      const [resProj, resUsers] = await Promise.all([
-        fetch("https://localhost:7173/api/ProjectMaster"),
-        fetch("https://localhost:7173/api/User")
+      setLoading(true);
+      const [allocRes, projRes, usersRes] = await Promise.all([
+        getProjectAllocations(),
+        getProjects(),
+        getUsers()
       ]);
-      const jsonProj = await resProj.json();
-      const jsonUsers = await resUsers.json();
 
-      const projData = jsonProj.data ? jsonProj.data : (Array.isArray(jsonProj) ? jsonProj : []);
-      const usersData = jsonUsers.data ? jsonUsers.data : (Array.isArray(jsonUsers) ? jsonUsers : []);
-
-      setProjectsMaster(projData.map(p => ({ projectID: p.projectID || p.projectId, projectTitle: p.projectTitle })));
-      setStudentsList(usersData.map(u => ({ userID: u.userID || u.userId, fullName: u.fullName })));
-      setFacultyList(usersData.map(u => ({ userID: u.userID || u.userId, fullName: u.fullName })));
-    } catch (error) {
-      console.error("Error fetching dropdown options:", error);
+      const allUsers = Array.isArray(usersRes) ? usersRes : (usersRes?.data || []);
+      setAllocations(Array.isArray(allocRes) ? allocRes : (allocRes?.data || []));
+      setProjectsMaster(Array.isArray(projRes) ? projRes : (projRes?.data || []));
+      setStudentsList(allUsers.filter(u => (u.userTypeName || u.UserTypeName || '').toLowerCase() === 'student'));
+      setFacultyList(allUsers.filter(u => (u.userTypeName || u.UserTypeName || '').toLowerCase() === 'faculty'));
+      setErrorMessage('');
+    } catch (err) {
+      console.error('Failed to load project allocations:', err);
+      setErrorMessage(err.message || 'Failed to connect to backend.');
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAllocations();
-    fetchDropdownData();
+    loadData();
   }, []);
 
-  const filteredAllocations = allocations.filter(alloc => 
-    (alloc.projectTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (alloc.studentName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (alloc.facultyName || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredAllocations = allocations.filter(alloc => {
+    const title = alloc.projectTitle || alloc.ProjectTitle || '';
+    const student = alloc.studentName || alloc.StudentName || '';
+    const faculty = alloc.facultyName || alloc.FacultyName || '';
+    const q = searchQuery.toLowerCase();
+    return title.toLowerCase().includes(q) || student.toLowerCase().includes(q) || faculty.toLowerCase().includes(q);
+  });
 
   const handleOpenModal = (type, alloc = null) => {
     setModalType(type);
     if (alloc) {
       setSelectedAllocation(alloc);
       setFormData({
-        projectID: (alloc.projectID || '').toString(),
-        studentID: (alloc.studentID || '').toString(),
-        facultyID: (alloc.facultyID || '').toString(),
-        assignedDate: alloc.assignedDate || '',
-        projectStartDate: alloc.projectStartDate || '',
-        projectEndDate: alloc.projectEndDate || '',
-        totalTasksGiven: (alloc.totalTasksGiven || 0).toString(),
-        totalCompletedTasks: (alloc.totalCompletedTasks || 0).toString(),
-        completionPercentage: (alloc.completionPercentage || 0).toString(),
-        overAllGrade: alloc.overAllGrade || ''
+        projectID: (alloc.projectID || alloc.ProjectID || '').toString(),
+        studentID: (alloc.studentID || alloc.StudentID || '').toString(),
+        facultyID: (alloc.facultyID || alloc.FacultyID || '').toString(),
+        assignedDate: alloc.assignedDate ? alloc.assignedDate.substring(0, 10) : '',
+        projectStartDate: alloc.projectStartDate ? alloc.projectStartDate.substring(0, 10) : '',
+        projectEndDate: alloc.projectEndDate ? alloc.projectEndDate.substring(0, 10) : '',
+        totalTasksGiven: (alloc.totalTasksGiven || alloc.TotalTasksGiven || 0).toString(),
+        totalCompletedTasks: (alloc.totalCompletedTasks || alloc.TotalCompletedTasks || 0).toString(),
+        completionPercentage: (alloc.completionPercentage || alloc.progressPercentage || alloc.ProgressPercentage || 0).toString(),
+        overAllGrade: alloc.overAllGrade || alloc.OverAllGrade || ''
       });
     } else {
       setSelectedAllocation(null);
       setFormData({
-        projectID: projectsMaster.length > 0 ? projectsMaster[0].projectID.toString() : '',
-        studentID: studentsList.length > 0 ? studentsList[0].userID.toString() : '',
-        facultyID: facultyList.length > 0 ? facultyList[0].userID.toString() : '',
+        projectID: projectsMaster.length > 0 ? (projectsMaster[0].projectID || projectsMaster[0].ProjectID).toString() : '',
+        studentID: studentsList.length > 0 ? (studentsList[0].userID || studentsList[0].UserID).toString() : '',
+        facultyID: facultyList.length > 0 ? (facultyList[0].userID || facultyList[0].UserID).toString() : '',
         assignedDate: new Date().toISOString().substring(0, 10),
         projectStartDate: new Date().toISOString().substring(0, 10),
         projectEndDate: new Date(Date.now() + 90 * 86400000).toISOString().substring(0, 10),
         totalTasksGiven: '0',
         totalCompletedTasks: '0',
         completionPercentage: '0',
-        overAllGrade: ''
+        overAllGrade: 'A'
       });
     }
     setIsModalOpen(true);
@@ -128,46 +115,45 @@ const ManageProjectAllocations = () => {
     e.preventDefault();
     try {
       if (modalType === 'Add') {
-        await fetch("https://localhost:7173/api/ProjectAllocation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectID: parseInt(formData.projectID),
-            studentID: parseInt(formData.studentID),
-            facultyID: parseInt(formData.facultyID),
-            projectStartDate: formData.projectStartDate ? new Date(formData.projectStartDate).toISOString() : new Date().toISOString(),
-            projectEndDate: formData.projectEndDate ? new Date(formData.projectEndDate).toISOString() : new Date().toISOString()
-          })
-        });
+        const payload = {
+          projectID: parseInt(formData.projectID),
+          studentID: parseInt(formData.studentID),
+          facultyID: parseInt(formData.facultyID),
+          projectStartDate: formData.projectStartDate || new Date().toISOString(),
+          projectEndDate: formData.projectEndDate || new Date().toISOString()
+        };
+        await createProjectAllocation(payload);
       } else if (modalType === 'Edit' && selectedAllocation) {
-        const id = selectedAllocation.projectAllocationID;
-        await fetch(`https://localhost:7173/api/ProjectAllocation/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectID: parseInt(formData.projectID),
-            studentID: parseInt(formData.studentID),
-            facultyID: parseInt(formData.facultyID),
-            assignedDate: formData.assignedDate ? new Date(formData.assignedDate).toISOString() : new Date().toISOString(),
-            projectStartDate: formData.projectStartDate ? new Date(formData.projectStartDate).toISOString() : new Date().toISOString(),
-            projectEndDate: formData.projectEndDate ? new Date(formData.projectEndDate).toISOString() : new Date().toISOString(),
-            totalTasksGiven: parseInt(formData.totalTasksGiven) || 0,
-            totalCompletedTasks: parseInt(formData.totalCompletedTasks) || 0,
-            progressPercentage: parseInt(formData.completionPercentage) || 0,
-            overAllGrade: formData.overAllGrade
-          })
-        });
+        const id = selectedAllocation.projectAllocationID || selectedAllocation.ProjectAllocationID;
+        const payload = {
+          projectID: parseInt(formData.projectID),
+          studentID: parseInt(formData.studentID),
+          facultyID: parseInt(formData.facultyID),
+          assignedDate: formData.assignedDate || new Date().toISOString(),
+          projectStartDate: formData.projectStartDate || new Date().toISOString(),
+          projectEndDate: formData.projectEndDate || new Date().toISOString(),
+          totalTasksGiven: parseInt(formData.totalTasksGiven) || 0,
+          totalCompletedTasks: parseInt(formData.totalCompletedTasks) || 0,
+          progressPercentage: parseFloat(formData.completionPercentage) || 0,
+          overAllGrade: formData.overAllGrade || null
+        };
+        await updateProjectAllocation(id, payload);
       }
-      fetchAllocations();
       handleCloseModal();
-    } catch (error) {
-      console.error("Error saving allocation:", error);
+      await loadData();
+    } catch (err) {
+      alert(err.message || 'Error saving project allocation');
     }
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this project allocation?')) {
-      setAllocations(allocations.filter(a => a.projectAllocationID !== id));
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this Project Allocation?')) {
+      try {
+        await deleteProjectAllocation(id);
+        await loadData();
+      } catch (err) {
+        alert(err.message || 'Failed to delete project allocation');
+      }
     }
   };
 
@@ -194,6 +180,13 @@ const ManageProjectAllocations = () => {
         </button>
       </div>
 
+      {/* Error message banner */}
+      {errorMessage && (
+        <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px' }}>
+          <strong>Error connecting to backend:</strong> {errorMessage}
+        </div>
+      )}
+
       {/* Filter and Search */}
       <div className="card" style={{ padding: '16px 20px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#f1f5f9', borderRadius: '8px', padding: '8px 14px', maxWidth: '380px' }}>
@@ -203,7 +196,7 @@ const ManageProjectAllocations = () => {
           </svg>
           <input 
             type="text" 
-            placeholder="Search allocations..." 
+            placeholder="Search allocations by project, student, faculty..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{ border: 'none', background: 'transparent', outline: 'none', marginLeft: '10px', width: '100%', fontSize: '0.9rem', color: 'var(--text-main)' }}
@@ -231,104 +224,120 @@ const ManageProjectAllocations = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredAllocations.length > 0 ? (
-                filteredAllocations.map((alloc) => (
-                  <tr key={alloc.projectAllocationID}>
-                    <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{alloc.projectAllocationID}</span></td>
-                    <td>
-                      <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{alloc.projectTitle}</span>
-                    </td>
-                    <td><span style={{ fontWeight: 500 }}>{alloc.studentName}</span></td>
-                    <td style={{ color: 'var(--text-muted)' }}>{alloc.facultyName}</td>
-                    <td>
-                      <div className="progress-bar-wrap">
-                        <div className="progress-bar-track">
-                          <div className="progress-bar-fill" style={{ width: `${alloc.completionPercentage}%` }}></div>
+              {loading ? (
+                <tr>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                    Loading project allocations from backend...
+                  </td>
+                </tr>
+              ) : filteredAllocations.length > 0 ? (
+                filteredAllocations.map((alloc) => {
+                  const id = alloc.projectAllocationID || alloc.ProjectAllocationID;
+                  const title = alloc.projectTitle || alloc.ProjectTitle;
+                  const student = alloc.studentName || alloc.StudentName;
+                  const faculty = alloc.facultyName || alloc.FacultyName;
+                  const progress = alloc.progressPercentage !== undefined ? alloc.progressPercentage : (alloc.ProgressPercentage || alloc.completionPercentage || 0);
+                  const start = alloc.projectStartDate ? alloc.projectStartDate.substring(0, 10) : '-';
+                  const end = alloc.projectEndDate ? alloc.projectEndDate.substring(0, 10) : '-';
+                  const grade = alloc.overAllGrade || alloc.OverAllGrade || 'N/A';
+                  return (
+                    <tr key={id}>
+                      <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{id}</span></td>
+                      <td>
+                        <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{title}</span>
+                      </td>
+                      <td><span style={{ fontWeight: 500 }}>{student}</span></td>
+                      <td style={{ color: 'var(--text-muted)' }}>{faculty}</td>
+                      <td>
+                        <div className="progress-bar-wrap">
+                          <div className="progress-bar-track">
+                            <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
+                          </div>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{progress}%</span>
                         </div>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{alloc.completionPercentage}%</span>
-                      </div>
-                    </td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      <div>Start: {alloc.projectStartDate}</div>
-                      <div>End: {alloc.projectEndDate}</div>
-                    </td>
-                    <td>
-                      <span className="badge progress" style={{ backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid var(--border)' }}>
-                        {alloc.overAllGrade || 'N/A'}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        <button 
-                          onClick={() => handleOpenModal('Details', alloc)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#e0f2fe',
-                            color: '#0369a1',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                          </svg>
-                          View
-                        </button>
-                        <button 
-                          onClick={() => handleOpenModal('Edit', alloc)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: 'var(--primary-light)',
-                            color: 'var(--primary)',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                          </svg>
-                          Edit
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(alloc.projectAllocationID)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#fee2e2',
-                            color: '#ef4444',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                          </svg>
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        <div>Start: {start}</div>
+                        <div>End: {end}</div>
+                      </td>
+                      <td>
+                        <span className="badge progress" style={{ backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid var(--border)' }}>
+                          {grade}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button 
+                            onClick={() => handleOpenModal('Details', alloc)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#e0f2fe',
+                              color: '#0369a1',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                              <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            View
+                          </button>
+                          <button 
+                            onClick={() => handleOpenModal('Edit', alloc)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: 'var(--primary-light)',
+                              color: 'var(--primary)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(id)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#fee2e2',
+                              color: '#ef4444',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>

@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
+import { getUserRoles, getRoles, getUsers, createUserRole, updateUserRole, deleteUserRole } from '../services/api';
 
 const ManageUserRoles = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('Add'); // 'Add', 'Edit', 'Details'
   const [selectedUserRole, setSelectedUserRole] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -18,68 +21,52 @@ const ManageUserRoles = () => {
   const [rolesList, setRolesList] = useState([]);
   const [usersList, setUsersList] = useState([]);
 
-  const fetchUserRoles = async () => {
+  const loadData = async () => {
     try {
-      const response = await fetch("https://localhost:7173/api/UserRole");
-      const json = await response.json();
-      const data = json.data ? json.data : (Array.isArray(json) ? json : []);
-      const normalized = data.map(ur => ({
-        rolePermissionID: ur.rolePermissionID || ur.rolePermissionId,
-        userID: ur.userID || ur.userId,
-        userName: ur.userName || '',
-        userEmail: ur.userEmail || '',
-        roleID: ur.roleID || ur.roleId,
-        roleName: ur.roleName || ''
-      }));
-      setUserRoles(normalized);
-    } catch (error) {
-      console.error("Error fetching user roles:", error);
-    }
-  };
-
-  const fetchRolesAndUsers = async () => {
-    try {
-      const [resRoles, resUsers] = await Promise.all([
-        fetch("https://localhost:7173/api/Role"),
-        fetch("https://localhost:7173/api/User")
+      setLoading(true);
+      const [urRes, rolesRes, usersRes] = await Promise.all([
+        getUserRoles(),
+        getRoles(),
+        getUsers()
       ]);
-      const jsonRoles = await resRoles.json();
-      const jsonUsers = await resUsers.json();
 
-      const rolesData = jsonRoles.data ? jsonRoles.data : (Array.isArray(jsonRoles) ? jsonRoles : []);
-      const usersData = jsonUsers.data ? jsonUsers.data : (Array.isArray(jsonUsers) ? jsonUsers : []);
-
-      setRolesList(rolesData.map(r => ({ roleID: r.roleID || r.roleId, roleName: r.roleName })));
-      setUsersList(usersData.map(u => ({ userID: u.userID || u.userId, fullName: u.fullName, email: u.email })));
-    } catch (error) {
-      console.error("Error fetching roles or users list:", error);
+      setUserRoles(Array.isArray(urRes) ? urRes : (urRes?.data || []));
+      setRolesList(Array.isArray(rolesRes) ? rolesRes : (rolesRes?.data || []));
+      setUsersList(Array.isArray(usersRes) ? usersRes : (usersRes?.data || []));
+      setErrorMessage('');
+    } catch (err) {
+      console.error('Failed to load user roles:', err);
+      setErrorMessage(err.message || 'Failed to connect to backend.');
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUserRoles();
-    fetchRolesAndUsers();
+    loadData();
   }, []);
 
-  const filteredUserRoles = userRoles.filter(ur => 
-    (ur.userName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (ur.userEmail || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (ur.roleName || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUserRoles = userRoles.filter(ur => {
+    const user = ur.userName || ur.fullName || ur.UserName || '';
+    const email = ur.userEmail || ur.email || ur.Email || '';
+    const role = ur.roleName || ur.RoleName || '';
+    const q = searchQuery.toLowerCase();
+    return user.toLowerCase().includes(q) || email.toLowerCase().includes(q) || role.toLowerCase().includes(q);
+  });
 
   const handleOpenModal = (type, ur = null) => {
     setModalType(type);
     if (ur) {
       setSelectedUserRole(ur);
       setFormData({
-        userID: (ur.userID || '').toString(),
-        roleID: (ur.roleID || '').toString()
+        userID: (ur.userID || ur.UserID || '').toString(),
+        roleID: (ur.roleID || ur.RoleID || '').toString()
       });
     } else {
       setSelectedUserRole(null);
       setFormData({
-        userID: usersList.length > 0 ? usersList[0].userID.toString() : '',
-        roleID: rolesList.length > 0 ? rolesList[0].roleID.toString() : ''
+        userID: usersList.length > 0 ? (usersList[0].userID || usersList[0].UserID).toString() : '',
+        roleID: rolesList.length > 0 ? (rolesList[0].roleID || rolesList[0].RoleID).toString() : ''
       });
     }
     setIsModalOpen(true);
@@ -93,42 +80,31 @@ const ManageUserRoles = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const payload = {
+        userID: parseInt(formData.userID),
+        roleID: parseInt(formData.roleID)
+      };
+
       if (modalType === 'Add') {
-        await fetch("https://localhost:7173/api/UserRole", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userID: parseInt(formData.userID),
-            roleID: parseInt(formData.roleID)
-          })
-        });
+        await createUserRole(payload);
       } else if (modalType === 'Edit' && selectedUserRole) {
-        const id = selectedUserRole.rolePermissionID || selectedUserRole.rolePermissionId;
-        await fetch(`https://localhost:7173/api/UserRole/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userID: parseInt(formData.userID),
-            roleID: parseInt(formData.roleID)
-          })
-        });
+        const id = selectedUserRole.userRoleID || selectedUserRole.UserRoleID || selectedUserRole.rolePermissionID;
+        await updateUserRole(id, payload);
       }
-      fetchUserRoles();
       handleCloseModal();
-    } catch (error) {
-      console.error("Error saving user role:", error);
+      await loadData();
+    } catch (err) {
+      alert(err.message || 'Error saving user role mapping');
     }
   };
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to remove this Role Assignment?')) {
       try {
-        await fetch(`https://localhost:7173/api/UserRole/${id}`, {
-          method: "DELETE"
-        });
-        fetchUserRoles();
-      } catch (error) {
-        console.error("Error deleting user role:", error);
+        await deleteUserRole(id);
+        await loadData();
+      } catch (err) {
+        alert(err.message || 'Failed to remove user role');
       }
     }
   };
@@ -155,6 +131,13 @@ const ManageUserRoles = () => {
           Map User to Role
         </button>
       </div>
+
+      {/* Error message banner */}
+      {errorMessage && (
+        <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px' }}>
+          <strong>Error connecting to backend:</strong> {errorMessage}
+        </div>
+      )}
 
       {/* Filter and Search */}
       <div className="card" style={{ padding: '16px 20px', marginBottom: '20px' }}>
@@ -190,89 +173,101 @@ const ManageUserRoles = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredUserRoles.length > 0 ? (
-                filteredUserRoles.map((ur) => (
-                  <tr key={ur.rolePermissionID}>
-                    <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{ur.rolePermissionID}</span></td>
-                    <td>
-                      <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{ur.userName}</span>
-                    </td>
-                    <td style={{ color: 'var(--text-muted)' }}>{ur.userEmail}</td>
-                    <td>
-                      <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{ur.roleName}</span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        <button 
-                          onClick={() => handleOpenModal('Details', ur)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#e0f2fe',
-                            color: '#0369a1',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                          </svg>
-                          View
-                        </button>
-                        <button 
-                          onClick={() => handleOpenModal('Edit', ur)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: 'var(--primary-light)',
-                            color: 'var(--primary)',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                          </svg>
-                          Edit
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(ur.rolePermissionID)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#fee2e2',
-                            color: '#ef4444',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                          </svg>
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+              {loading ? (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                    Loading user roles from backend...
+                  </td>
+                </tr>
+              ) : filteredUserRoles.length > 0 ? (
+                filteredUserRoles.map((ur) => {
+                  const id = ur.userRoleID || ur.UserRoleID || ur.rolePermissionID;
+                  const userName = ur.userName || ur.fullName || ur.UserName || '-';
+                  const email = ur.userEmail || ur.email || ur.Email || '-';
+                  const roleName = ur.roleName || ur.RoleName || '-';
+                  return (
+                    <tr key={id}>
+                      <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{id}</span></td>
+                      <td>
+                        <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{userName}</span>
+                      </td>
+                      <td style={{ color: 'var(--text-muted)' }}>{email}</td>
+                      <td>
+                        <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{roleName}</span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button 
+                            onClick={() => handleOpenModal('Details', ur)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#e0f2fe',
+                              color: '#0369a1',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                              <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            View
+                          </button>
+                          <button 
+                            onClick={() => handleOpenModal('Edit', ur)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: 'var(--primary-light)',
+                              color: 'var(--primary)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(id)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#fee2e2',
+                              color: '#ef4444',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>

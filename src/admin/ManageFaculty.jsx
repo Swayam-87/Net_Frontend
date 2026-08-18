@@ -1,78 +1,146 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
+import { getUsers, getUserTypes, createUser, updateUser, deleteUser } from '../services/api';
 
 const ManageFaculty = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('Add');
+  const [selectedFaculty, setSelectedFaculty] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // Blank form state
+  // Form state
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
+    password: '',
     mobileNumber: '',
-    departmentExpertise: '',
+    userCode: '',
     isActive: 'true'
   });
 
-  const faculties = [
-    {
-      facultyId: 1,
-      fullName: 'Prof. Madhuresh Fichadiya',
-      email: 'madhuresh.fichadiya@darshan.ac.in',
-      mobileNumber: '9876543210',
-      expertise: 'ASP.NET Core, Enterprise APIs & Web Security',
-      isActive: true
-    },
-    {
-      facultyId: 2,
-      fullName: 'Dr. Amit Vora',
-      email: 'amit.vora@darshan.ac.in',
-      mobileNumber: '9900887766',
-      expertise: 'Machine Learning, Python & Data Analytics',
-      isActive: true
-    },
-    {
-      facultyId: 3,
-      fullName: 'Prof. Shruti Sen',
-      email: 'shruti.sen@darshan.ac.in',
-      mobileNumber: '9566778899',
-      expertise: 'Database Management & Cloud Computing',
-      isActive: true
+  const [faculties, setFaculties] = useState([]);
+  const [facultyTypeId, setFacultyTypeId] = useState(2);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [usersRes, typesRes] = await Promise.all([
+        getUsers(),
+        getUserTypes()
+      ]);
+
+      const allTypes = Array.isArray(typesRes) ? typesRes : (typesRes?.data || []);
+      const facType = allTypes.find(t => (t.userTypeName || t.UserTypeName || '').toLowerCase() === 'faculty');
+      const fTypeId = facType ? (facType.userTypeID || facType.UserTypeID) : 2;
+      setFacultyTypeId(fTypeId);
+
+      const allUsers = Array.isArray(usersRes) ? usersRes : (usersRes?.data || []);
+      const facultyList = allUsers.filter(u => 
+        (u.userTypeName || u.UserTypeName || '').toLowerCase() === 'faculty' ||
+        (u.userTypeID || u.UserTypeID) === fTypeId
+      );
+      setFaculties(facultyList);
+      setErrorMessage('');
+    } catch (err) {
+      console.error('Failed to load faculty:', err);
+      setErrorMessage(err.message || 'Failed to connect to backend.');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const filteredFaculties = faculties.filter(faculty => 
-    faculty.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    faculty.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    faculty.expertise.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const handleOpenModal = (type) => {
+  const filteredFaculties = faculties.filter(faculty => {
+    const name = faculty.fullName || faculty.FullName || '';
+    const email = faculty.email || faculty.Email || '';
+    const mobile = faculty.mobileNumber || faculty.MobileNumber || '';
+    const code = faculty.userCode || faculty.UserCode || '';
+    const q = searchQuery.toLowerCase();
+    return name.toLowerCase().includes(q) || email.toLowerCase().includes(q) || mobile.toLowerCase().includes(q) || code.toLowerCase().includes(q);
+  });
+
+  const handleOpenModal = (type, faculty = null) => {
     setModalType(type);
-    setFormData({
-      fullName: '',
-      email: '',
-      mobileNumber: '',
-      departmentExpertise: '',
-      isActive: 'true'
-    });
+    if (faculty) {
+      setSelectedFaculty(faculty);
+      setFormData({
+        fullName: faculty.fullName || faculty.FullName || '',
+        email: faculty.email || faculty.Email || '',
+        password: faculty.password || faculty.Password || '',
+        mobileNumber: faculty.mobileNumber || faculty.MobileNumber || '',
+        userCode: faculty.userCode || faculty.UserCode || '',
+        isActive: (faculty.isActive !== undefined ? faculty.isActive : true).toString()
+      });
+    } else {
+      setSelectedFaculty(null);
+      setFormData({
+        fullName: '',
+        email: '',
+        password: 'password123',
+        mobileNumber: '',
+        userCode: 'FAC-' + Math.floor(1000 + Math.random() * 9000),
+        isActive: 'true'
+      });
+    }
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
+    setSelectedFaculty(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsModalOpen(false);
+    try {
+      if (modalType === 'Add') {
+        const payload = {
+          userTypeID: facultyTypeId,
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          password: formData.password || 'password123',
+          mobileNumber: formData.mobileNumber.trim(),
+          userCode: formData.userCode.trim(),
+          profilePicturePath: 'default.png'
+        };
+        await createUser(payload);
+      } else if (modalType === 'Edit' && selectedFaculty) {
+        const id = selectedFaculty.userID || selectedFaculty.UserID || selectedFaculty.facultyId;
+        const payload = {
+          userTypeID: facultyTypeId,
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          password: formData.password || selectedFaculty.password || 'password123',
+          mobileNumber: formData.mobileNumber.trim(),
+          userCode: formData.userCode.trim(),
+          profilePicturePath: selectedFaculty.profilePicturePath || 'default.png',
+          isActive: formData.isActive === 'true',
+          isDeleted: false
+        };
+        await updateUser(id, payload);
+      }
+      handleCloseModal();
+      await loadData();
+    } catch (err) {
+      alert(err.message || 'Error saving faculty record');
+    }
   };
 
-  const handleDeleteClick = (e) => {
-    e.preventDefault();
-    // Do nothing
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to remove this faculty record?')) {
+      try {
+        await deleteUser(id);
+        await loadData();
+      } catch (err) {
+        alert(err.message || 'Failed to delete faculty member');
+      }
+    }
   };
 
   return (
@@ -97,6 +165,13 @@ const ManageFaculty = () => {
           Add Faculty
         </button>
       </div>
+
+      {/* Error message banner */}
+      {errorMessage && (
+        <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px' }}>
+          <strong>Error connecting to backend:</strong> {errorMessage}
+        </div>
+      )}
 
       {/* Filter and Search */}
       <div className="card" style={{ padding: '16px 20px', marginBottom: '20px' }}>
@@ -126,77 +201,91 @@ const ManageFaculty = () => {
               <tr>
                 <th style={{ width: '80px' }}>ID</th>
                 <th>Faculty Name</th>
+                <th>Faculty Code</th>
                 <th>Email Address</th>
                 <th>Mobile Number</th>
-                <th>Department / Specialization</th>
                 <th>Status</th>
                 <th style={{ width: '150px', textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredFaculties.length > 0 ? (
-                filteredFaculties.map((faculty) => (
-                  <tr key={faculty.facultyId}>
-                    <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{faculty.facultyId}</span></td>
-                    <td><span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{faculty.fullName}</span></td>
-                    <td style={{ color: 'var(--text-muted)' }}>{faculty.email}</td>
-                    <td style={{ color: 'var(--text-muted)' }}>{faculty.mobileNumber}</td>
-                    <td style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{faculty.expertise}</td>
-                    <td>
-                      <span className={`badge ${faculty.isActive ? 'completed' : 'rejected'}`}>
-                        {faculty.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        <button 
-                          onClick={() => handleOpenModal('Edit')}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: 'var(--primary-light)',
-                            color: 'var(--primary)',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                          </svg>
-                          Edit
-                        </button>
-                        <button 
-                          onClick={handleDeleteClick}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#fee2e2',
-                            color: '#ef4444',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                          </svg>
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+              {loading ? (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                    Loading faculty members from backend...
+                  </td>
+                </tr>
+              ) : filteredFaculties.length > 0 ? (
+                filteredFaculties.map((faculty) => {
+                  const id = faculty.userID || faculty.UserID || faculty.facultyId;
+                  const name = faculty.fullName || faculty.FullName;
+                  const email = faculty.email || faculty.Email;
+                  const mobile = faculty.mobileNumber || faculty.MobileNumber || '-';
+                  const code = faculty.userCode || faculty.UserCode || '-';
+                  const active = faculty.isActive !== undefined ? faculty.isActive : true;
+                  return (
+                    <tr key={id}>
+                      <td><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>#{id}</span></td>
+                      <td><span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{name}</span></td>
+                      <td><span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>{code}</span></td>
+                      <td style={{ color: 'var(--text-muted)' }}>{email}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>{mobile}</td>
+                      <td>
+                        <span className={`badge ${active ? 'completed' : 'rejected'}`}>
+                          {active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button 
+                            onClick={() => handleOpenModal('Edit', faculty)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: 'var(--primary-light)',
+                              color: 'var(--primary)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(id)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#fee2e2',
+                              color: '#ef4444',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
@@ -310,17 +399,31 @@ const ManageFaculty = () => {
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label" htmlFor="departmentExpertise">Department & Specialization</label>
-                  <input 
-                    type="text" 
-                    id="departmentExpertise"
-                    className="form-control" 
-                    placeholder="e.g. Machine Learning, Web Development, Cloud Computing"
-                    value={formData.departmentExpertise}
-                    onChange={(e) => setFormData({ ...formData, departmentExpertise: e.target.value })}
-                    required
-                  />
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="userCode">Faculty Code</label>
+                    <input 
+                      type="text" 
+                      id="userCode"
+                      className="form-control" 
+                      placeholder="e.g. FAC-1001"
+                      value={formData.userCode}
+                      onChange={(e) => setFormData({ ...formData, userCode: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="password">Account Password</label>
+                    <input 
+                      type="password" 
+                      id="password"
+                      className="form-control" 
+                      placeholder="Enter password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      required={modalType === 'Add'}
+                    />
+                  </div>
                 </div>
 
                 <div className="form-group" style={{ marginBottom: 0 }}>

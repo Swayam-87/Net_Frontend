@@ -15,7 +15,6 @@ import FacultyProjectAllocations from './faculty/ProjectAllocations';
 
 import AdminDashboard from './admin/AdminDashboard';
 import AdminProfile from './admin/AdminProfile';
-import AdminManageRoles from './admin/ManageRoles';
 import AdminManageUsers from './admin/ManageUsers';
 import AdminManageUserTypes from './admin/ManageUserTypes';
 import AdminManageUserRoles from './admin/ManageUserRoles';
@@ -47,7 +46,6 @@ function App() {
 
         {/* Admin Workspace Routes */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        <Route path="/admin/roles" element={<AdminManageRoles />} />
         <Route path="/admin/users" element={<AdminManageUsers />} />
         <Route path="/admin/user-types" element={<AdminManageUserTypes />} />
         <Route path="/admin/user-roles" element={<AdminManageUserRoles />} />
